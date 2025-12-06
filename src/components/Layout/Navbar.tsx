@@ -23,12 +23,12 @@ export const Navbar: React.FC = () => {
   ];
 
   return (
-    <nav className="bg-white shadow-md sticky top-0 z-50">
+    <nav className="bg-card shadow-md sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex justify-between items-center h-16">
           <Link href="/dashboard" className="flex items-center space-x-2">
-            <Mountain className="w-8 h-8 text-green-600" />
-            <span className="text-xl font-bold text-gray-800">AdventureMate</span>
+            <Mountain className="w-8 h-8 text-traveller" />
+            <span className="text-xl font-bold text-foreground">AdventureMate</span>
           </Link>
 
           <div className="hidden md:flex items-center space-x-1">
@@ -40,8 +40,8 @@ export const Navbar: React.FC = () => {
                   href={link.path}
                   className={`flex items-center space-x-1 px-3 py-2 rounded-md transition-colors ${
                     isActive(link.path)
-                      ? 'bg-green-50 text-green-600'
-                      : 'text-gray-600 hover:bg-gray-50'
+                      ? 'bg-traveller/10 text-traveller'
+                      : 'text-muted-foreground hover:bg-muted'
                   }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -55,17 +55,17 @@ export const Navbar: React.FC = () => {
             {profile && (
               <div className="flex items-center space-x-3">
                 <div className="flex items-center space-x-2">
-                  <Trophy className="w-5 h-5 text-yellow-500" />
-                  <span className="text-sm font-medium text-gray-700">{profile.points}</span>
+                  <Trophy className="w-5 h-5 text-trip" />
+                  <span className="text-sm font-medium text-foreground">{profile.points}</span>
                 </div>
-                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                  <span className="text-sm font-bold text-green-600">
+                <div className="w-8 h-8 bg-traveller/20 rounded-full flex items-center justify-center">
+                  <span className="text-sm font-bold text-traveller">
                     {profile.username?.charAt(0).toUpperCase()}
                   </span>
                 </div>
                 <button
                   onClick={signOut}
-                  className="text-gray-600 hover:text-red-600 transition-colors"
+                  className="text-muted-foreground hover:text-destructive transition-colors"
                   title="Sign out"
                 >
                   <LogOut className="w-5 h-5" />

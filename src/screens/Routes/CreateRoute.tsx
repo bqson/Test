@@ -36,20 +36,74 @@ export const CreateRoute: React.FC = () => {
     setLoading(true);
 
     try {
+      // Get user's id_user
+      const { data: accountData } = await supabase
+        .from('account')
+        .select('id_user')
+        .eq('email', user!.email || '')
+        .maybeSingle();
+
+      if (!accountData?.id_user) {
+        throw new Error('User account not found');
+      }
+
+      // Generate IDs
+      const generateId = (length: number = 6) => {
+        return Math.random().toString(36).substring(2, 2 + length).toUpperCase();
+      };
+
+      // First create a trip (routes require id_trip)
+      const idTrip = generateId(6);
+      const tripData = {
+        id_trip: idTrip,
+        title: formData.title,
+        description: formData.description,
+        departure: formData.start_location || 'Unknown',
+        destination: formData.end_location || 'Unknown',
+        distance: parseFloat(formData.distance_km) || 0,
+        start_date: new Date().toISOString().split('T')[0],
+        end_date: new Date(Date.now() + (parseInt(formData.duration_days) || 1) * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .split('T')[0],
+        difficult: formData.difficulty,
+        spent_amount: 0,
+        total_budget: 1000000, // Default budget
+        status: 'planning',
+      };
+
+      const { data: tripResult, error: tripError } = await supabase
+        .from('trip')
+        .insert([tripData])
+        .select()
+        .single();
+
+      if (tripError) throw tripError;
+
+      // Join user to trip
+      const { error: joinError } = await supabase
+        .from('join_trip')
+        .insert([
+          {
+            id_user: accountData.id_user,
+            id_trip: idTrip,
+          },
+        ]);
+
+      if (joinError) console.error('Error joining trip:', joinError);
+
+      // Now create route
+      const idRoute = generateId(6);
       const { data: routeData, error: routeError } = await supabase
         .from('routes')
         .insert([
           {
-            creator_id: user!.id,
+            id_route: idRoute,
             title: formData.title,
             description: formData.description,
-            difficulty: formData.difficulty,
-            duration_days: parseInt(formData.duration_days) || null,
-            distance_km: parseFloat(formData.distance_km) || null,
             start_location: formData.start_location,
             end_location: formData.end_location,
-            tags: formData.tags.split(',').map((t) => t.trim()).filter(Boolean),
-            is_public: formData.is_public,
+            id_trip: idTrip,
+            route_order: 1,
           },
         ])
         .select()
@@ -57,23 +111,10 @@ export const CreateRoute: React.FC = () => {
 
       if (routeError) throw routeError;
 
-      if (stopovers.length > 0) {
-        const stopoverData = stopovers.map((stopover, index) => ({
-          route_id: routeData.id,
-          order_index: index + 1,
-          location_name: stopover.location_name,
-          latitude: parseFloat(stopover.latitude),
-          longitude: parseFloat(stopover.longitude),
-          description: stopover.description,
-          estimated_duration_hours: parseFloat(stopover.estimated_duration_hours) || null,
-        }));
+      // Stopovers table doesn't exist in schema, skip for now
+      // You could store this in route description or create a separate table
 
-        const { error: stopoverError } = await supabase.from('route_stopovers').insert(stopoverData);
-
-        if (stopoverError) throw stopoverError;
-      }
-
-      router.push(`/routes/${routeData.id}`);
+      router.push(`/routes/${routeData.uuid}`);
     } catch (error: any) {
       console.error('Error creating route:', error);
       alert(error.message || 'Failed to create route');
@@ -106,30 +147,30 @@ export const CreateRoute: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold text-gray-800 mb-8">Create New Route</h1>
+        <h1 className="text-3xl font-bold text-foreground mb-8">Create New Route</h1>
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="bg-card rounded-lg shadow-md p-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="md:col-span-2">
-              <label className="block text-gray-700 text-sm font-medium mb-2">Route Title</label>
+              <label className="block text-foreground text-sm font-medium mb-2">Route Title</label>
               <input
                 type="text"
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="w-full px-4 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-routes bg-background text-foreground"
                 required
               />
             </div>
 
             <div className="md:col-span-2">
-              <label className="block text-gray-700 text-sm font-medium mb-2">Description</label>
+              <label className="block text-foreground text-sm font-medium mb-2">Description</label>
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 rows={4}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="w-full px-4 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-routes bg-background text-foreground"
               />
             </div>
 
@@ -315,7 +356,7 @@ export const CreateRoute: React.FC = () => {
             <button
               type="submit"
               disabled={loading}
-              className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors disabled:opacity-50"
+              className="px-6 py-2 bg-routes hover:bg-routes/90 text-white rounded-md transition-colors disabled:opacity-50"
             >
               {loading ? 'Creating...' : 'Create Route'}
             </button>

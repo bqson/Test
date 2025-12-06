@@ -45,23 +45,72 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchProfile = async (userId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
+      // Get user email from auth
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      
+      if (!authUser?.email) {
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+
+      // Find account by email
+      const { data: accountData, error: accountError } = await supabase
+        .from('account')
+        .select('*, users(*)')
+        .eq('email', authUser.email)
         .maybeSingle();
 
-      if (error) throw error;
-      setProfile(data);
+      if (accountError && accountError.code !== 'PGRST116') {
+        console.error('Error fetching account:', accountError);
+      }
+
+      // Get traveller info if exists
+      if (accountData?.id_user) {
+        const { data: travellerData } = await supabase
+          .from('traveller')
+          .select('*')
+          .eq('id_user', accountData.id_user)
+          .maybeSingle();
+
+        // Combine account and traveller data
+        setProfile({
+          ...accountData,
+          ...travellerData,
+          username: accountData?.username,
+          email: accountData?.email,
+          avatar_url: accountData?.users?.avatar_url || null,
+          name: accountData?.users?.name || accountData?.username,
+          points: 0, // Default points
+          rank: 'bronze', // Default rank
+          created_at: accountData?.users?.created_at || new Date().toISOString(),
+        });
+      } else {
+        // Fallback: create minimal profile from auth user
+        setProfile({
+          username: authUser.email?.split('@')[0] || 'user',
+          email: authUser.email,
+          name: authUser.email?.split('@')[0] || 'User',
+          points: 0,
+          rank: 'bronze',
+        });
+      }
     } catch (error) {
       console.error('Error fetching profile:', error);
+      // Fallback profile
+      setProfile({
+        username: 'user',
+        email: userId,
+        points: 0,
+        rank: 'bronze',
+      });
     } finally {
       setLoading(false);
     }
   };
 
   const signUp = async (email: string, password: string, username: string) => {
-    // Sign up with username in metadata
+    // Sign up with Supabase Auth
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -71,59 +120,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
       },
     });
-
+  
     if (error) throw error;
-
+  
+    // Profile will be created automatically by database trigger
+    // Wait a moment for trigger to complete
     if (data.user) {
-      // Try to create profile immediately using RPC function with user_id
-      // The function uses SECURITY DEFINER to bypass RLS
-      const { error: profileError } = await supabase.rpc('create_user_profile', {
-        user_id_param: data.user.id,
-        username_param: username,
-        full_name_param: '',
-      });
-
-      if (profileError) {
-        // If RPC function doesn't exist or fails, wait for session and try direct insert
-        // Wait for session to be established after signup
-        let sessionEstablished = false;
-        let retries = 10;
-        let delay = 200;
-
-        while (retries > 0 && !sessionEstablished) {
-          const { data: { session } } = await supabase.auth.getSession();
-          
-          if (session && session.user) {
-            sessionEstablished = true;
-            
-            // Try direct insert (should work now that we have session)
-            const { error: insertError } = await supabase
-              .from('profiles')
-              .insert([
-                {
-                  id: data.user.id,
-                  username,
-                  full_name: '',
-                },
-              ]);
-
-            if (insertError) {
-              throw new Error(`Failed to create profile: ${insertError.message}`);
-            }
-            
-            return; // Success
-          }
-
-          retries--;
-          await new Promise(resolve => setTimeout(resolve, delay));
-          delay = Math.min(delay * 1.5, 2000); // Exponential backoff, max 2s
-        }
-
-        // If we couldn't establish session, throw error
-        if (!sessionEstablished) {
-          throw new Error('Failed to create profile. Please try signing in after email confirmation.');
-        }
-      }
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
   };
 
