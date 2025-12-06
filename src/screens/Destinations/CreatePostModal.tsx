@@ -1,30 +1,63 @@
 'use client';
 
-import React, { useState } from 'react';
-import { X, Send } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Send, MapPin } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 
-interface CreateDestinationPostProps {
-  destinationId: string;
-  destinationName: string;
+interface CreatePostModalProps {
   onClose: () => void;
   onPostCreated: () => void;
 }
 
-export const CreateDestinationPost: React.FC<CreateDestinationPostProps> = ({
-  destinationId,
-  destinationName,
+export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   onClose,
   onPostCreated,
 }) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [destinations, setDestinations] = useState<any[]>([]);
+  const [loadingDestinations, setLoadingDestinations] = useState(true);
   const [formData, setFormData] = useState({
+    destinationId: '',
     title: '',
     content: '',
     tags: '',
   });
+
+  useEffect(() => {
+    fetchDestinations();
+  }, []);
+
+  const fetchDestinations = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('destination')
+        .select('id_destination, name')
+        .order('name', { ascending: true })
+        .limit(100);
+
+      if (error) {
+        console.error('Destinations query error:', error);
+        console.error('Error details:', {
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+          message: error.message,
+        });
+        throw error;
+      }
+      
+      setDestinations(data || []);
+    } catch (error: any) {
+      console.error('Error fetching destinations:', error);
+      console.error('Full error object:', JSON.stringify(error, null, 2));
+      // Set empty array on error so UI doesn't break
+      setDestinations([]);
+    } finally {
+      setLoadingDestinations(false);
+    }
+  };
 
   const generateId = (length: number = 6) => {
     return Math.random().toString(36).substring(2, 2 + length).toUpperCase();
@@ -34,6 +67,11 @@ export const CreateDestinationPost: React.FC<CreateDestinationPostProps> = ({
     e.preventDefault();
     if (!user) {
       alert('Please login to create a post');
+      return;
+    }
+
+    if (!formData.destinationId) {
+      alert('Please select a destination');
       return;
     }
 
@@ -71,11 +109,11 @@ export const CreateDestinationPost: React.FC<CreateDestinationPostProps> = ({
         throw new Error('Traveller profile not found. Please contact support.');
       }
 
-      // Get destination's id_destination (destinationId is already id_destination)
+      // Get destination's id_destination (formData.destinationId is already id_destination)
       const { data: destinationData, error: destinationError } = await supabase
         .from('destination')
-        .select('id_destination')
-        .eq('id_destination', destinationId)
+        .select('id_destination, name')
+        .eq('id_destination', formData.destinationId)
         .single();
 
       if (destinationError) {
@@ -113,7 +151,7 @@ export const CreateDestinationPost: React.FC<CreateDestinationPostProps> = ({
             id_destination: destinationData.id_destination,
             title: formData.title,
             content: formData.content,
-            tags: formData.tags || `destination:${destinationName}`,
+            tags: formData.tags || `destination:${destinationData.name}`,
             total_likes: 0,
             total_views: 0,
           },
@@ -151,7 +189,7 @@ export const CreateDestinationPost: React.FC<CreateDestinationPostProps> = ({
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-card rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-card border-b border-border p-4 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-foreground">Write about {destinationName}</h2>
+          <h2 className="text-xl font-bold text-foreground">Create New Post</h2>
           <button
             onClick={onClose}
             className="text-muted-foreground hover:text-foreground transition-colors"
@@ -161,6 +199,31 @@ export const CreateDestinationPost: React.FC<CreateDestinationPostProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">
+              Select Destination <span className="text-destructive">*</span>
+            </label>
+            {loadingDestinations ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-post"></div>
+              </div>
+            ) : (
+              <select
+                value={formData.destinationId}
+                onChange={(e) => setFormData({ ...formData, destinationId: e.target.value })}
+                className="w-full px-4 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-post bg-background text-foreground"
+                required
+              >
+                <option value="">Choose a destination...</option>
+                {destinations.map((dest) => (
+                  <option key={dest.id_destination} value={dest.id_destination}>
+                    {dest.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-foreground mb-2">Title</label>
             <input
@@ -208,7 +271,7 @@ export const CreateDestinationPost: React.FC<CreateDestinationPostProps> = ({
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !formData.destinationId}
               className="px-4 py-2 bg-post hover:bg-post/90 text-white rounded-md transition-colors disabled:opacity-50 flex items-center space-x-2"
             >
               <Send className="w-4 h-4" />

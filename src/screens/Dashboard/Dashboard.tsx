@@ -2,9 +2,14 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Map, Users, BookOpen, TrendingUp, Award, Plus } from 'lucide-react';
+import { Map, Users, BookOpen, TrendingUp, Award, Plus, Plane, MessageSquare } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { WeatherMap } from '../../components/Map/WeatherMap';
+import { CreateRouteModal } from '../Routes/CreateRouteModal';
+import { CreateTripModal } from '../Trips/CreateTripModal';
+import { CreateGroupModal } from '../Groups/CreateGroupModal';
+import { CreatePostModal } from '../Forum/CreatePostModal';
 
 export const Dashboard: React.FC = () => {
   const { user, profile } = useAuth();
@@ -16,6 +21,12 @@ export const Dashboard: React.FC = () => {
   });
   const [recentRoutes, setRecentRoutes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Modal states
+  const [showCreateRoute, setShowCreateRoute] = useState(false);
+  const [showCreateTrip, setShowCreateTrip] = useState(false);
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [showCreatePost, setShowCreatePost] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -57,8 +68,11 @@ export const Dashboard: React.FC = () => {
         .select('uuid', { count: 'exact', head: true })
         .eq('id_user', idUser);
 
-      // Groups not in schema - set to 0
-      const groupsRes = { count: 0 };
+      // Get groups count
+      const { count: groupsCount } = await supabase
+        .from('group_member')
+        .select('uuid', { count: 'exact', head: true })
+        .eq('id_user', idUser);
 
       // Get recent routes from trips user has joined
       const publicRoutesRes = tripIds.length > 0
@@ -73,7 +87,7 @@ export const Dashboard: React.FC = () => {
       setStats({
         totalRoutes: routesRes.count || 0,
         totalTrips: tripsRes.count || 0,
-        activeGroups: 0, // Not in schema
+        activeGroups: groupsCount || 0,
         totalPoints: profile?.points || 0,
       });
 
@@ -82,9 +96,9 @@ export const Dashboard: React.FC = () => {
         ...route,
         id: route.uuid,
         difficulty: route.trip?.difficult || 'moderate',
-        duration_days: null, // Not in schema
+        duration_days: null,
         distance_km: route.trip?.distance || 0,
-        view_count: 0, // Not in schema
+        view_count: 0,
         profiles: {
           username: profile?.username || 'user',
           avatar_url: profile?.avatar_url || null,
@@ -104,6 +118,33 @@ export const Dashboard: React.FC = () => {
     { icon: Users, label: 'Active Groups', value: stats.activeGroups, color: 'bg-region', link: '/groups' },
     { icon: BookOpen, label: 'My Trips', value: stats.totalTrips, color: 'bg-trip', link: '/trips' },
     { icon: Award, label: 'Total Points', value: stats.totalPoints, color: 'bg-trip', link: '/profile' },
+  ];
+
+  const quickActions = [
+    {
+      icon: Map,
+      label: 'Create New Route',
+      color: 'routes',
+      onClick: () => setShowCreateRoute(true),
+    },
+    {
+      icon: Users,
+      label: 'Create Travel Group',
+      color: 'region',
+      onClick: () => setShowCreateGroup(true),
+    },
+    {
+      icon: Plane,
+      label: 'Plan New Trip',
+      color: 'trip',
+      onClick: () => setShowCreateTrip(true),
+    },
+    {
+      icon: MessageSquare,
+      label: 'Start Discussion',
+      color: 'post',
+      onClick: () => setShowCreatePost(true),
+    },
   ];
 
   if (loading) {
@@ -154,82 +195,125 @@ export const Dashboard: React.FC = () => {
               </Link>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {recentRoutes.map((route) => (
-                <Link
-                  key={route.id}
-                  href={`/routes/${route.id}`}
-                  className="border border-border rounded-lg p-4 hover:border-routes transition-colors"
+            {recentRoutes.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {recentRoutes.map((route) => (
+                  <Link
+                    key={route.id}
+                    href={`/routes/${route.id}`}
+                    className="border border-border rounded-lg p-4 hover:border-routes transition-colors"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <h3 className="font-semibold text-foreground">{route.title}</h3>
+                      <span className="text-xs bg-routes/20 text-routes px-2 py-1 rounded">
+                        {route.difficulty}
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{route.description}</p>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{route.duration_days || 'N/A'} days</span>
+                      <span>{route.distance_km || 0} km</span>
+                      <span className="flex items-center">
+                        <TrendingUp className="w-3 h-3 mr-1" />
+                        {route.view_count || 0}
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Map className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                <p className="text-muted-foreground mb-4">No routes yet</p>
+                <button
+                  onClick={() => setShowCreateRoute(true)}
+                  className="px-4 py-2 bg-routes hover:bg-routes/90 text-white rounded-lg transition-colors text-sm"
                 >
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="font-semibold text-foreground">{route.title}</h3>
-                    <span className="text-xs bg-routes/20 text-routes px-2 py-1 rounded">
-                      {route.difficulty}
-                    </span>
-                  </div>
-                  <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{route.description}</p>
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{route.duration_days || 'N/A'} days</span>
-                    <span>{route.distance_km || 0} km</span>
-                    <span className="flex items-center">
-                      <TrendingUp className="w-3 h-3 mr-1" />
-                      {route.view_count || 0}
-                    </span>
-                  </div>
-                </Link>
-              ))}
-            </div>
+                  Create Your First Route
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="bg-card rounded-lg shadow-md p-6">
             <h2 className="text-xl font-bold text-foreground mb-6">Quick Actions</h2>
             <div className="space-y-3">
-              <Link
-                href="/routes/new"
-                className="flex items-center space-x-3 p-3 bg-routes/10 hover:bg-routes/20 rounded-lg transition-colors"
-              >
-                <Plus className="w-5 h-5 text-routes" />
-                <span className="text-sm font-medium text-foreground">Create New Route</span>
-              </Link>
-              <Link
-                href="/groups/new"
-                className="flex items-center space-x-3 p-3 bg-region/10 hover:bg-region/20 rounded-lg transition-colors"
-              >
-                <Plus className="w-5 h-5 text-region" />
-                <span className="text-sm font-medium text-foreground">Create Travel Group</span>
-              </Link>
-              <Link
-                href="/trips/new"
-                className="flex items-center space-x-3 p-3 bg-trip/10 hover:bg-trip/20 rounded-lg transition-colors"
-              >
-                <Plus className="w-5 h-5 text-trip" />
-                <span className="text-sm font-medium text-foreground">Plan New Trip</span>
-              </Link>
-              <Link
-                href="/forum"
-                className="flex items-center space-x-3 p-3 bg-post/10 hover:bg-post/20 rounded-lg transition-colors"
-              >
-                <Plus className="w-5 h-5 text-post" />
-                <span className="text-sm font-medium text-foreground">Start Discussion</span>
-              </Link>
+              {quickActions.map((action) => {
+                const Icon = action.icon;
+                return (
+                  <button
+                    key={action.label}
+                    onClick={action.onClick}
+                    className={`w-full flex items-center space-x-3 p-3 bg-${action.color}/10 hover:bg-${action.color}/20 rounded-lg transition-colors text-left`}
+                  >
+                    <Plus className={`w-5 h-5 text-${action.color}`} />
+                    <span className="text-sm font-medium text-foreground">{action.label}</span>
+                  </button>
+                );
+              })}
             </div>
 
             <div className="mt-6 p-4 bg-gradient-to-r from-traveller to-traveller/80 rounded-lg text-white">
-              <h3 className="font-bold mb-2">Your Rank: {profile?.rank}</h3>
+              <h3 className="font-bold mb-2">Your Rank: {profile?.rank || 'Beginner'}</h3>
               <div className="flex items-center justify-between text-sm">
                 <span>Level Progress</span>
-                <span>{profile?.points} pts</span>
+                <span>{profile?.points || 0} pts</span>
               </div>
               <div className="w-full bg-traveller/30 rounded-full h-2 mt-2">
                 <div
                   className="bg-white rounded-full h-2"
-                  style={{ width: `${Math.min((profile?.points / 1000) * 100, 100)}%` }}
+                  style={{ width: `${Math.min(((profile?.points || 0) / 1000) * 100, 100)}%` }}
                 ></div>
               </div>
             </div>
           </div>
         </div>
+
+        {/* Weather Map Section */}
+        <div className="mb-8">
+          <WeatherMap />
+        </div>
       </div>
+
+      {/* Modals */}
+      {showCreateRoute && (
+        <CreateRouteModal
+          onClose={() => setShowCreateRoute(false)}
+          onRouteCreated={() => {
+            fetchDashboardData();
+            setShowCreateRoute(false);
+          }}
+        />
+      )}
+
+      {showCreateTrip && (
+        <CreateTripModal
+          onClose={() => setShowCreateTrip(false)}
+          onTripCreated={() => {
+            fetchDashboardData();
+            setShowCreateTrip(false);
+          }}
+        />
+      )}
+
+      {showCreateGroup && (
+        <CreateGroupModal
+          onClose={() => setShowCreateGroup(false)}
+          onGroupCreated={() => {
+            fetchDashboardData();
+            setShowCreateGroup(false);
+          }}
+        />
+      )}
+
+      {showCreatePost && (
+        <CreatePostModal
+          onClose={() => setShowCreatePost(false)}
+          onPostCreated={() => {
+            setShowCreatePost(false);
+          }}
+        />
+      )}
     </div>
   );
 };

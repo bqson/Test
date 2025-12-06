@@ -1,14 +1,16 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Mountain, Map, Users, Wallet, BookOpen, MessageCircle, Trophy, User, LogOut } from 'lucide-react';
+import { Mountain, Map, Users, Wallet, BookOpen, MessageCircle, Trophy, User, LogOut, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { EmergencyModal } from '../Emergency/EmergencyModal';
 
 export const Navbar: React.FC = () => {
   const pathname = usePathname();
   const { user, profile, signOut } = useAuth();
+  const [showEmergency, setShowEmergency] = useState(false);
 
   const isActive = (path: string) => pathname === path;
 
@@ -52,6 +54,17 @@ export const Navbar: React.FC = () => {
           </div>
 
           <div className="flex items-center space-x-4">
+            {/* Emergency Button */}
+            <button
+              onClick={() => setShowEmergency(true)}
+              className="relative flex items-center space-x-1.5 px-3 py-2 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-lg transition-all shadow-md hover:shadow-lg group"
+              title="Emergency SOS"
+            >
+              <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-400 rounded-full animate-ping"></div>
+              <AlertTriangle className="w-4 h-4 group-hover:animate-pulse" />
+              <span className="text-sm font-bold hidden sm:inline">SOS</span>
+            </button>
+
             {profile && (
               <div className="flex items-center space-x-3">
                 <div className="flex items-center space-x-2">
@@ -75,6 +88,12 @@ export const Navbar: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Emergency Modal */}
+      <EmergencyModal
+        isOpen={showEmergency}
+        onClose={() => setShowEmergency(false)}
+      />
     </nav>
   );
 };
