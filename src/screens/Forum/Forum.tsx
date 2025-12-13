@@ -4,6 +4,16 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { Plus, MessageCircle, Eye, Clock } from "lucide-react";
 import { supabase } from "../../lib/supabase";
+import { DUMMY_POSTS } from "../../../data/dummy";
+
+const getCategoryColor = (category: string) => {
+  switch (category) {
+    case "Travel Tips": return "#10b981";
+    case "Destinations": return "#3b82f6";
+    case "Gear & Equipment": return "#f59e0b"; 
+    default: return "#6366f1"; 
+  }
+};
 
 export const Forum: React.FC = () => {
   const [posts, setPosts] = useState<any[]>([]);
@@ -16,6 +26,8 @@ export const Forum: React.FC = () => {
 
   const fetchForumData = async () => {
     try {
+      setLoading(true);
+      /*
       // Use post table instead of forum_posts
       const postsRes = await supabase
         .from("post")
@@ -24,7 +36,7 @@ export const Forum: React.FC = () => {
         .limit(20);
 
       if (postsRes.error) throw postsRes.error;
-
+      
       // Get user info for posts
       const postUserIds = [
         ...new Set((postsRes.data || []).map((p: any) => p.id_user)),
@@ -73,9 +85,9 @@ export const Forum: React.FC = () => {
           },
         };
       });
-
+      
       setPosts(transformedPosts);
-
+      
       // Create mock categories from post tags/categories
       const uniqueCategories = Array.from(
         new Set(
@@ -91,6 +103,17 @@ export const Forum: React.FC = () => {
       }));
 
       setCategories(uniqueCategories);
+      */
+      setPosts(DUMMY_POSTS);
+      const uniqueCats = Array.from(new Set(DUMMY_POSTS.map(p => p.category)))
+        .map(name => ({
+          id: name.toLowerCase().replace(/\s+/g, '-'),
+          name,
+          color: getCategoryColor(name),
+        }));
+      
+      setCategories(uniqueCats);
+
     } catch (error) {
       console.error("Error fetching forum data:", error);
     } finally {
@@ -144,7 +167,7 @@ export const Forum: React.FC = () => {
             {posts.map((post) => (
               <Link
                 key={post.id}
-                href={`/forum/${post.id}`}
+                href={`/forum/postId/${post.id}`}
                 className="bg-card rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow block"
               >
                 <div className="flex items-start space-x-4">

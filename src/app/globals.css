@@ -37,6 +37,11 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  /* Guidelines Colors - NewPost Form */
+  --color-guidelines-bg: var(--guidelines-bg);
+  --color-guidelines-border: var(--guidelines-border);
+  --color-guidelines-text: var(--guidelines-text);
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -138,6 +143,9 @@
   /* POST & POST_REPLY - Indigo (bài viết) */
   --entity-post: #6366f1; /* indigo-500 */
   --entity-post-reply: #818cf8; /* indigo-400 */
+  --guidelines-bg: #eff6ff;       /* blue-50 */
+  --guidelines-border: #dbeafe;   /* blue-100 */
+  --guidelines-text: #1d4ed8;     /* blue-700 */
   
   /* DIARY - Violet (nhật ký) */
   --entity-diary: #a855f7; /* violet-500 */
@@ -223,6 +231,9 @@
   /* POST & POST_REPLY - Indigo (lighter for dark mode) */
   --entity-post: #818cf8; /* indigo-400 */
   --entity-post-reply: #a5b4fc; /* indigo-300 */
+  --guidelines-bg: #1e3a8a;       /* blue-900 */
+  --guidelines-border: #1e40af;   /* blue-800 */
+  --guidelines-text: #93c5fd;     /* blue-300 */
   
   /* DIARY - Violet (lighter for dark mode) */
   --entity-diary: #c084fc; /* violet-400 */
