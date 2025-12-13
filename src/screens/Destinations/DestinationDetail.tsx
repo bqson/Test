@@ -100,7 +100,7 @@ export const DestinationDetail: React.FC<DestinationDetailProps> = ({ destinatio
       const { data, error } = await supabase
         .from('destination')
         .select('*')
-        .eq('uuid', destinationId)
+        .eq('id_destination', destinationId)
         .single();
 
       if (error) throw error;
@@ -209,8 +209,13 @@ export const DestinationDetail: React.FC<DestinationDetailProps> = ({ destinatio
     );
   }
 
-  const images = Array.isArray(destination.images) ? destination.images : [];
-  const hasImages = images.length > 0;
+  // Parse images - format can be [{url, caption}] or string[]
+  const rawImages = Array.isArray(destination.images) ? destination.images : [];
+  const images = rawImages.map((img: any) => ({
+    url: img?.url || (typeof img === 'string' ? img : ''),
+    caption: img?.caption || destination.name,
+  }));
+  const hasImages = images.length > 0 && images[0].url;
 
   return (
     <div className="min-h-screen bg-background">
@@ -231,13 +236,19 @@ export const DestinationDetail: React.FC<DestinationDetailProps> = ({ destinatio
             {hasImages ? (
               <>
                 <img
-                  src={images[currentImageIndex]}
-                  alt={destination.name}
+                  src={images[currentImageIndex].url}
+                  alt={images[currentImageIndex].caption || destination.name}
                   className="w-full h-full object-cover"
                   onError={(e) => {
                     e.currentTarget.style.display = 'none';
                   }}
                 />
+                {/* Image caption */}
+                {images[currentImageIndex].caption && (
+                  <div className="absolute bottom-16 left-4 bg-card/80 backdrop-blur-sm px-3 py-1 rounded text-sm text-foreground">
+                    {images[currentImageIndex].caption}
+                  </div>
+                )}
                 {images.length > 1 && (
                   <>
                     <button
@@ -253,7 +264,7 @@ export const DestinationDetail: React.FC<DestinationDetailProps> = ({ destinatio
                       <ArrowLeft className="w-5 h-5 text-foreground rotate-180" />
                     </button>
                     <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2">
-                      {images.map((_: string, index: number) => (
+                      {images.map((_: { url: string; caption: string }, index: number) => (
                         <button
                           key={index}
                           onClick={() => setCurrentImageIndex(index)}
@@ -406,15 +417,19 @@ export const DestinationDetail: React.FC<DestinationDetailProps> = ({ destinatio
               <MessageSquare className="w-6 h-6 mr-2 text-post" />
               Posts & Reviews
             </h2>
-            {user && (
-              <button
-                onClick={() => setShowCreatePost(true)}
-                className="flex items-center space-x-2 px-4 py-2 bg-post hover:bg-post/90 text-white rounded-lg transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Write a Post</span>
-              </button>
-            )}
+            <button
+              onClick={() => {
+                if (!user) {
+                  router.push('/auth');
+                  return;
+                }
+                setShowCreatePost(true);
+              }}
+              className="flex items-center space-x-2 px-4 py-2 bg-post hover:bg-post/90 text-white rounded-lg transition-colors shadow-md"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Write a Post</span>
+            </button>
           </div>
 
           {postsLoading ? (
@@ -425,14 +440,18 @@ export const DestinationDetail: React.FC<DestinationDetailProps> = ({ destinatio
             <div className="text-center py-12 bg-muted/30 rounded-lg">
               <MessageSquare className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground mb-4">No posts yet. Be the first to share your experience!</p>
-              {user && (
-                <button
-                  onClick={() => setShowCreatePost(true)}
-                  className="px-4 py-2 bg-post hover:bg-post/90 text-white rounded-lg transition-colors"
-                >
-                  Write First Post
-                </button>
-              )}
+              <button
+                onClick={() => {
+                  if (!user) {
+                    router.push('/auth');
+                    return;
+                  }
+                  setShowCreatePost(true);
+                }}
+                className="px-4 py-2 bg-post hover:bg-post/90 text-white rounded-lg transition-colors shadow-md"
+              >
+                Write First Post
+              </button>
             </div>
           ) : (
             <div className="space-y-4">

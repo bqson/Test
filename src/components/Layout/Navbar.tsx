@@ -5,31 +5,47 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Mountain,
-  BookOpen,
+  Map,
+  Users,
   Wallet,
+  BookOpen,
   MessageCircle,
+  Trophy,
+  User,
   LogOut,
+  AlertTriangle,
   Menu,
   X,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
+import { EmergencyModal } from "../Emergency/EmergencyModal";
 
 export const Navbar: React.FC = () => {
   const pathname = usePathname();
-  const { profile, signOut } = useAuth();
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { profile, signOut } = useAuth(); // profile, signOut từ useAuth
+  const [isMenuOpen, setIsMenuOpen] = useState(false); // State cho Mobile Menu
+  const [showEmergency, setShowEmergency] = useState(false); // State cho Emergency Modal
+
   const isActive = (path: string) => pathname === path;
+
+  // Hợp nhất tất cả các liên kết điều hướng từ cả hai phiên bản
   const navLinks = [
     { path: "/dashboard", icon: Mountain, label: "Dashboard" },
-    { path: "/destinations", icon: BookOpen, label: "Destinations" },
     { path: "/trips", icon: Wallet, label: "Trips" },
+    { path: "/destinations", icon: BookOpen, label: "Destinations" },
     { path: "/forum", icon: MessageCircle, label: "Forum" },
-    { path: "/diary", icon: BookOpen, label: "Diary" },
+    { path: "/diary", icon: BookOpen, label: "Diary" }, // Giữ lại từ phiên bản 2
   ];
+
   const handleSignOut = () => {
     signOut();
     setIsMenuOpen(false);
   };
+
+  const handleToggleMenu = () => {
+    setIsMenuOpen(!isMenuOpen);
+  };
+
   const NavItem: React.FC<{
     link: (typeof navLinks)[0];
     isMobile?: boolean;
@@ -39,6 +55,7 @@ export const Navbar: React.FC = () => {
       <Link
         key={link.path}
         href={link.path}
+        // Đóng menu khi nhấp vào liên kết trên mobile
         onClick={() => isMobile && setIsMenuOpen(false)}
         className={`flex items-center space-x-1 px-3 py-2 rounded-md transition-colors duration-200 ${
           isMobile ? "w-full text-lg justify-start" : "hover:bg-muted"
@@ -58,6 +75,7 @@ export const Navbar: React.FC = () => {
     <nav className="bg-card shadow-md sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex justify-between items-center h-16">
+          {/* Logo và Tên Ứng dụng */}
           <Link
             href="/dashboard"
             className="flex items-center space-x-2 transition-opacity hover:opacity-80 z-50"
@@ -67,16 +85,34 @@ export const Navbar: React.FC = () => {
               AdventureMate
             </span>
           </Link>
+
+          {/* Liên kết điều hướng (Màn hình lớn) */}
           <div className="hidden md:flex items-center grow">
-            <div className="flex items-center justify-center space-x-8 w-full">
-              {navLinks.map((link) => (
-                <NavItem key={link.path} link={link} />
-              ))}
+            {/* Canh giữa các liên kết trên màn hình lớn */}
+            <div className="flex items-center justify-center space-x-2 w-full">
+              {navLinks
+                .filter((link) => link.path !== "/profile") // Di chuyển Profile ra khỏi thanh nav chính trên desktop
+                .map((link) => (
+                  <NavItem key={link.path} link={link} />
+                ))}
             </div>
           </div>
+
           <div className="flex items-center space-x-4">
+            {/* Nút Khẩn cấp/SOS (Thêm từ phiên bản 1) */}
+            <button
+              onClick={() => setShowEmergency(true)}
+              className="relative flex items-center space-x-1.5 px-3 py-2 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-lg transition-all shadow-md hover:shadow-lg group"
+              title="Emergency SOS"
+            >
+              <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-400 rounded-full animate-ping"></div>
+              <AlertTriangle className="w-4 h-4 group-hover:animate-pulse" />
+              <span className="text-sm font-bold hidden sm:inline">SOS</span>
+            </button>
+
             {profile && (
               <div className="flex items-center space-x-3">
+                {/* Avatar / Hồ sơ */}
                 <Link
                   href="/profile"
                   title="Xem hồ sơ cá nhân"
@@ -86,6 +122,8 @@ export const Navbar: React.FC = () => {
                     {profile.username?.charAt(0).toUpperCase() || "U"}
                   </span>
                 </Link>
+
+                {/* Đăng xuất (Màn hình lớn) */}
                 <button
                   onClick={handleSignOut}
                   className="hidden md:block p-1 rounded-full text-muted-foreground hover:text-destructive hover:bg-muted transition-colors duration-200"
@@ -99,7 +137,7 @@ export const Navbar: React.FC = () => {
             {/* Hamburger Menu Icon (Màn hình nhỏ) */}
             <button
               className="md:hidden text-foreground p-2 rounded-md hover:bg-muted transition-colors z-50"
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              onClick={handleToggleMenu}
               title="Mở/Đóng menu"
             >
               {isMenuOpen ? (
@@ -112,6 +150,7 @@ export const Navbar: React.FC = () => {
         </div>
       </div>
 
+      {/* Mobile Menu (Sử dụng logic từ phiên bản 2) */}
       <div
         className={`md:hidden absolute top-16 left-0 w-full bg-card shadow-lg transition-all duration-300 ease-in-out transform ${
           isMenuOpen
@@ -135,6 +174,12 @@ export const Navbar: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Emergency Modal (Thêm từ phiên bản 1) */}
+      <EmergencyModal
+        isOpen={showEmergency}
+        onClose={() => setShowEmergency(false)}
+      />
     </nav>
   );
 };
