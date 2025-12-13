@@ -8,10 +8,14 @@ import { DUMMY_POSTS } from "../../../data/dummy";
 
 const getCategoryColor = (category: string) => {
   switch (category) {
-    case "Travel Tips": return "#10b981";
-    case "Destinations": return "#3b82f6";
-    case "Gear & Equipment": return "#f59e0b"; 
-    default: return "#6366f1"; 
+    case "Travel Tips":
+      return "#10b981";
+    case "Destinations":
+      return "#3b82f6";
+    case "Gear & Equipment":
+      return "#f59e0b";
+    default:
+      return "#6366f1";
   }
 };
 
@@ -27,99 +31,127 @@ export const Forum: React.FC = () => {
   const fetchForumData = async () => {
     try {
       setLoading(true);
-      /*
-      // Use post table instead of forum_posts
-      const postsRes = await supabase
-        .from("post")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(20);
 
-      if (postsRes.error) throw postsRes.error;
-      
-      // Get user info for posts
-      const postUserIds = [
-        ...new Set((postsRes.data || []).map((p: any) => p.id_user)),
-      ];
-      const userInfoMap: Record<string, any> = {};
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/posts`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
 
-      if (postUserIds.length > 0) {
-        // Get traveller and user info
-        const { data: travellers } = await supabase
-          .from("traveller")
-          .select("id_user")
-          .in("id_user", postUserIds);
-
-        const travellerIds = travellers?.map((t) => t.id_user) || [];
-
-        if (travellerIds.length > 0) {
-          const { data: users } = await supabase
-            .from("users")
-            .select("id_user, name, avatar_url")
-            .in("id_user", travellerIds);
-
-          users?.forEach((u: any) => {
-            userInfoMap[u.id_user] = u;
-          });
-        }
+      if (!res.ok) {
+        throw new Error("Failed to fetch forum data");
       }
 
-      // Transform posts data
-      const transformedPosts = (postsRes.data || []).map((post: any) => {
-        const userInfo = userInfoMap[post.id_user] || {};
+      const data = await res.json();
 
-        return {
-          ...post,
-          id: post.uuid,
-          last_activity_at: post.updated_at || post.created_at,
-          reply_count: 0, // Can be calculated from post_reply if needed
-          view_count: post.total_views || 0,
-          is_pinned: false, // Not in schema
-          forum_categories: {
-            name: post.tags || "General",
-            color: "#6366f1", // Default indigo
-          },
-          profiles: {
-            username: userInfo.name || "user",
-            avatar_url: userInfo.avatar_url || null,
-          },
-        };
-      });
-      
-      setPosts(transformedPosts);
-      
-      // Create mock categories from post tags/categories
-      const uniqueCategories = Array.from(
-        new Set(
-          transformedPosts
-            .map((p: any) => p.forum_categories?.name)
-            .filter(Boolean)
-        )
-      ).map((name: any) => ({
-        id: name.toLowerCase(),
-        name,
-        color: "#6366f1",
-        order_index: 0,
-      }));
+      console.log("hehe", data);
 
-      setCategories(uniqueCategories);
-      */
-      setPosts(DUMMY_POSTS);
-      const uniqueCats = Array.from(new Set(DUMMY_POSTS.map(p => p.category)))
-        .map(name => ({
-          id: name.toLowerCase().replace(/\s+/g, '-'),
-          name,
-          color: getCategoryColor(name),
-        }));
-      
-      setCategories(uniqueCats);
-
+      // setPosts(data.posts);
+      // setCategories(data.categories);
     } catch (error) {
       console.error("Error fetching forum data:", error);
     } finally {
       setLoading(false);
     }
   };
+
+  // const fetchForumData = async () => {
+  //   try {
+  //     setLoading(true);
+  //     /*
+  //     // Use post table instead of forum_posts
+  //     const postsRes = await supabase
+  //       .from("post")
+  //       .select("*")
+  //       .order("created_at", { ascending: false })
+  //       .limit(20);
+
+  //     if (postsRes.error) throw postsRes.error;
+
+  //     // Get user info for posts
+  //     const postUserIds = [
+  //       ...new Set((postsRes.data || []).map((p: any) => p.id_user)),
+  //     ];
+  //     const userInfoMap: Record<string, any> = {};
+
+  //     if (postUserIds.length > 0) {
+  //       // Get traveller and user info
+  //       const { data: travellers } = await supabase
+  //         .from("traveller")
+  //         .select("id_user")
+  //         .in("id_user", postUserIds);
+
+  //       const travellerIds = travellers?.map((t) => t.id_user) || [];
+
+  //       if (travellerIds.length > 0) {
+  //         const { data: users } = await supabase
+  //           .from("users")
+  //           .select("id_user, name, avatar_url")
+  //           .in("id_user", travellerIds);
+
+  //         users?.forEach((u: any) => {
+  //           userInfoMap[u.id_user] = u;
+  //         });
+  //       }
+  //     }
+
+  //     // Transform posts data
+  //     const transformedPosts = (postsRes.data || []).map((post: any) => {
+  //       const userInfo = userInfoMap[post.id_user] || {};
+
+  //       return {
+  //         ...post,
+  //         id: post.uuid,
+  //         last_activity_at: post.updated_at || post.created_at,
+  //         reply_count: 0, // Can be calculated from post_reply if needed
+  //         view_count: post.total_views || 0,
+  //         is_pinned: false, // Not in schema
+  //         forum_categories: {
+  //           name: post.tags || "General",
+  //           color: "#6366f1", // Default indigo
+  //         },
+  //         profiles: {
+  //           username: userInfo.name || "user",
+  //           avatar_url: userInfo.avatar_url || null,
+  //         },
+  //       };
+  //     });
+
+  //     setPosts(transformedPosts);
+
+  //     // Create mock categories from post tags/categories
+  //     const uniqueCategories = Array.from(
+  //       new Set(
+  //         transformedPosts
+  //           .map((p: any) => p.forum_categories?.name)
+  //           .filter(Boolean)
+  //       )
+  //     ).map((name: any) => ({
+  //       id: name.toLowerCase(),
+  //       name,
+  //       color: "#6366f1",
+  //       order_index: 0,
+  //     }));
+
+  //     setCategories(uniqueCategories);
+  //     */
+  //     setPosts(DUMMY_POSTS);
+  //     const uniqueCats = Array.from(new Set(DUMMY_POSTS.map(p => p.category)))
+  //       .map(name => ({
+  //         id: name.toLowerCase().replace(/\s+/g, '-'),
+  //         name,
+  //         color: getCategoryColor(name),
+  //       }));
+
+  //     setCategories(uniqueCats);
+
+  //   } catch (error) {
+  //     console.error("Error fetching forum data:", error);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
 
   const formatTimeAgo = (dateString: string) => {
     const date = new Date(dateString);

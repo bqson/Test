@@ -1,32 +1,32 @@
-'use client';
+"use client";
 
-import { Forum } from '@/screens/Forum/Forum';
-import { Navbar } from '@/components/Layout/Navbar';
-import { useAuth } from '@/contexts/AuthContext';
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { Forum } from "@/screens/Forum/Forum";
+import { Navbar } from "@/components/Layout/Navbar";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 export default function ForumPage() {
-  // const { user, loading } = useAuth();
+  const { user, loading } = useAuth();
   const router = useRouter();
 
-  // useEffect(() => {
-  //   if (!loading && !user) {
-  //     router.push('/auth');
-  //   }
-  // }, [user, loading, router]);
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/auth");
+    }
+  }, [user, loading, router]);
 
-  // if (loading) {
-  //   return (
-  //     <div className="flex justify-center items-center h-screen">
-  //       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
-  //     </div>
-  //   );
-  // }
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+      </div>
+    );
+  }
 
-  // if (!user) {
-  //   return null;
-  // }
+  if (!user) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -35,4 +35,3 @@ export default function ForumPage() {
     </div>
   );
 }
-
