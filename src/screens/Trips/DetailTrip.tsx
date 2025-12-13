@@ -1,3 +1,5 @@
+// DetailTrip.tsx
+
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -9,49 +11,36 @@ import {
   Activity,
   ArrowLeft,
   PlusCircle,
-  Route,
-  Navigation,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { AddRouteForm } from "./AddRouteForm";
+import { AddRouteForm } from "./AddRouteForm"; // Import AddRouteForm
+import { ICost, IRoute, TripDetail } from "@/lib/type/interface";
+import { RouteCard } from "@/components/Route/RouteCard";
 
-// --- INTERFACE/TYPES ĐÃ CẬP NHẬT ---
-export interface IRoute {
-  id?: string;
-  index: number; // Đã thay thế cho 'day'
-  trip_id: string; // Mới
-  title: string;
-  description: string; // Mới
-  lngStart: number;
-  latStart: number;
-  lngEnd: number;
-  latEnd: number;
-  details: string[]; // Thay thế cho details
-  created_at: Date; // Mới
-  updated_at: Date; // Mới
-}
-
-interface TripDetail {
-  id: string;
-  title: string;
-  description: string;
-  departure: string;
-  destination: string;
-  start_date: string;
-  end_date: string;
-  difficult: number;
-  total_budget: number;
-  spent_amount: number;
-  status: "planning" | "ongoing" | "completed" | "cancelled";
-  currency: string;
-  members: number;
-  routes: IRoute[]; // Đã thay đổi
-}
-
-// Giá trị giả định cho created_at/updated_at
+// --- MOCK DATA VÀ UTILS ---
 const mockDate = new Date();
 
-// --- MOCK DATA ĐÃ SỬA ĐỔI (DÙNG 'index', THÊM TRƯỜNG MỚI) ---
+// Hàm giả lập tính toán lại tổng chi tiêu của chuyến đi
+const calculateSpentAmount = (routes: IRoute[]): number => {
+  return routes.reduce((sumRoute, route) => {
+    const routeCost = route.costs.reduce(
+      (sumCost, cost) => sumCost + cost.amount,
+      0
+    );
+    return sumRoute + routeCost;
+  }, 0);
+};
+
+// Hàm tiện ích formatCurrency
+const formatCurrency = (amount: number) => {
+  return amount.toLocaleString("vi-VN", {
+    style: "currency",
+    currency: "VND",
+    maximumFractionDigits: 0,
+  });
+};
+
+// Dữ liệu Mock đã cập nhật để bao gồm costs
 const MOCK_DETAIL_TRIPS: TripDetail[] = [
   {
     id: "mock_trip_1",
@@ -64,7 +53,7 @@ const MOCK_DETAIL_TRIPS: TripDetail[] = [
     end_date: "2025-01-17",
     difficult: 2,
     total_budget: 15000000,
-    spent_amount: 8500000,
+    spent_amount: 4500000, // Sẽ được tính lại bằng calculateSpentAmount
     status: "ongoing",
     currency: "VND",
     members: 4,
@@ -84,6 +73,26 @@ const MOCK_DETAIL_TRIPS: TripDetail[] = [
           "Nhận phòng du thuyền",
           "Ăn trưa & thăm quan Hang Sửng Sốt",
         ],
+        costs: [
+          {
+            id: "c1_1_1",
+            route_id: "r1_1",
+            description: "Xe bus Hà Nội - Hạ Long",
+            amount: 500000,
+            currency: "VND",
+            created_at: mockDate,
+            updated_at: mockDate,
+          },
+          {
+            id: "c1_1_2",
+            route_id: "r1_1",
+            description: "Phí Du thuyền/Ăn trưa (Ngày 1)",
+            amount: 4000000,
+            currency: "VND",
+            created_at: mockDate,
+            updated_at: mockDate,
+          },
+        ],
         created_at: mockDate,
         updated_at: mockDate,
       },
@@ -102,6 +111,7 @@ const MOCK_DETAIL_TRIPS: TripDetail[] = [
           "Chèo thuyền kayak tại Vịnh Lan Hạ",
           "Lớp học nấu ăn Việt Nam",
         ],
+        costs: [],
         created_at: mockDate,
         updated_at: mockDate,
       },
@@ -116,193 +126,24 @@ const MOCK_DETAIL_TRIPS: TripDetail[] = [
         lngEnd: 105.854,
         latEnd: 21.028,
         details: ["Ăn sáng cuối cùng", "Trở về Hà Nội"],
+        costs: [],
         created_at: mockDate,
         updated_at: mockDate,
       },
     ],
   },
-  {
-    id: "mock_trip_2",
-    title: "Trekking Fansipan",
-    description:
-      "Thử thách chinh phục nóc nhà Đông Dương trong 4 ngày. Cần chuẩn bị thể lực tốt.",
-    departure: "Sapa",
-    destination: "Fansipan Peak",
-    start_date: "2025-06-10",
-    end_date: "2025-06-13",
-    difficult: 5,
-    total_budget: 8000000,
-    spent_amount: 0,
-    status: "planning",
-    currency: "VND",
-    members: 2,
-    routes: [
-      {
-        id: "r2_1",
-        index: 1,
-        trip_id: "mock_trip_2",
-        title: "Sapa - Trạm Tôn - Trại 1 (2200m)",
-        description: "Khởi hành trekking và nghỉ đêm đầu tiên.",
-        lngStart: 103.834,
-        latStart: 22.337,
-        lngEnd: 103.811,
-        latEnd: 22.3,
-        details: [
-          "Di chuyển đến Trạm Tôn",
-          "Bắt đầu trekking",
-          "Nghỉ đêm tại Trại 1",
-        ],
-        created_at: mockDate,
-        updated_at: mockDate,
-      },
-      {
-        id: "r2_2",
-        index: 2,
-        trip_id: "mock_trip_2",
-        title: "Trại 1 - Trại 2 (2800m)",
-        description: "Ngày leo dốc chính.",
-        lngStart: 103.811,
-        latStart: 22.3,
-        lngEnd: 103.785,
-        latEnd: 22.28,
-        details: ["Leo dốc cao", "Ăn trưa dã chiến"],
-        created_at: mockDate,
-        updated_at: mockDate,
-      },
-      {
-        id: "r2_3",
-        index: 3,
-        trip_id: "mock_trip_2",
-        title: "Đỉnh Fansipan - Trại 2",
-        description: "Chinh phục đỉnh vào sáng sớm.",
-        lngStart: 103.785,
-        latStart: 22.28,
-        lngEnd: 103.787,
-        latEnd: 22.3,
-        details: ["Chinh phục đỉnh Fansipan lúc bình minh", "Trở về Trại 2"],
-        created_at: mockDate,
-        updated_at: mockDate,
-      },
-      {
-        id: "r2_4",
-        index: 4,
-        trip_id: "mock_trip_2",
-        title: "Trại 2 - Sapa",
-        description: "Hạ sơn và kết thúc hành trình.",
-        lngStart: 103.787,
-        latStart: 22.3,
-        lngEnd: 103.834,
-        latEnd: 22.337,
-        details: ["Hạ sơn", "Ăn mừng chiến thắng"],
-        created_at: mockDate,
-        updated_at: mockDate,
-      },
-    ],
-  },
-  {
-    id: "mock_trip_3",
-    title: "Đà Lạt Chill",
-    description:
-      "Nghỉ dưỡng nhẹ nhàng tại thành phố ngàn hoa, thăm quan các vườn dâu và cà phê.",
-    departure: "TP. Hồ Chí Minh",
-    destination: "Đà Lạt",
-    start_date: "2024-10-20",
-    end_date: "2024-10-24",
-    difficult: 1,
-    total_budget: 6000000,
-    spent_amount: 6300000,
-    status: "completed",
-    currency: "VND",
-    members: 3,
-    routes: [
-      {
-        id: "r3_1",
-        index: 1,
-        trip_id: "mock_trip_3",
-        title: "TP.HCM - Đà Lạt (Di chuyển & Check-in)",
-        description: "Di chuyển lên Đà Lạt và nghỉ ngơi.",
-        lngStart: 106.666,
-        latStart: 10.793,
-        lngEnd: 108.441,
-        latEnd: 11.942,
-        details: [
-          "Bay/Xe khách đến Đà Lạt",
-          "Nhận phòng khách sạn",
-          "Ăn tối tại Chợ đêm Đà Lạt",
-        ],
-        created_at: mockDate,
-        updated_at: mockDate,
-      },
-      {
-        id: "r3_2",
-        index: 2,
-        trip_id: "mock_trip_3",
-        title: "Thăm quan phía Đông",
-        description: "Thăm quan các điểm nổi tiếng phía Đông thành phố.",
-        lngStart: 108.441,
-        latStart: 11.942,
-        lngEnd: 108.513,
-        latEnd: 11.928,
-        details: [
-          "Đồi chè Cầu Đất",
-          "Chùa Linh Phước",
-          "Quảng trường Lâm Viên",
-        ],
-        created_at: mockDate,
-        updated_at: mockDate,
-      },
-      {
-        id: "r3_3",
-        index: 3,
-        trip_id: "mock_trip_3",
-        title: "Thăm quan phía Bắc",
-        description: "Thăm các địa điểm nghỉ dưỡng và tự nhiên.",
-        lngStart: 108.513,
-        latStart: 11.928,
-        lngEnd: 108.423,
-        latEnd: 11.948,
-        details: ["Đường hầm đất sét", "Hồ Tuyền Lâm", "Thiền viện Trúc Lâm"],
-        created_at: mockDate,
-        updated_at: mockDate,
-      },
-      {
-        id: "r3_4",
-        index: 4,
-        trip_id: "mock_trip_3",
-        title: "Vườn Dâu & Cafe",
-        description: "Thư giãn và thưởng thức đặc sản.",
-        lngStart: 108.423,
-        latStart: 11.948,
-        lngEnd: 108.441,
-        latEnd: 11.942,
-        details: ["Thăm vườn dâu", "Thưởng thức cafe tại tiệm cafe nổi tiếng"],
-        created_at: mockDate,
-        updated_at: mockDate,
-      },
-      {
-        id: "r3_5",
-        index: 5,
-        trip_id: "mock_trip_3",
-        title: "Đà Lạt - TP.HCM",
-        description: "Di chuyển về và mua sắm.",
-        lngStart: 108.441,
-        latStart: 11.942,
-        lngEnd: 106.666,
-        latEnd: 10.793,
-        details: ["Mua sắm đặc sản", "Di chuyển về"],
-        created_at: mockDate,
-        updated_at: mockDate,
-      },
-    ],
-  },
+  // THÊM CÁC TRIP KHÁC VÀO ĐÂY (VỚI routes[].costs: [])
 ];
-// --- KẾT THÚC MOCK DATA CHI TIẾT ĐÃ SỬA LỖI ---
 
 // Hàm giả lập fetch trip
 const fetchTripDetail = (id: string): Promise<TripDetail | undefined> => {
   return new Promise((resolve) => {
     setTimeout(() => {
       const trip = MOCK_DETAIL_TRIPS.find((t) => t.id === id);
+      if (trip) {
+        // Cập nhật spent_amount dựa trên costs trong mock data
+        trip.spent_amount = calculateSpentAmount(trip.routes);
+      }
       resolve(trip);
     }, 500);
   });
@@ -341,39 +182,97 @@ export const DetailTrip: React.FC<DetailTripProps> = ({ params }) => {
 
   // Hàm xử lý khi thêm Route mới
   const handleAddNewRoute = (
-    newRoute: Omit<IRoute, "id" | "created_at" | "updated_at" | "trip_id">
+    newRoute: Omit<
+      IRoute,
+      "id" | "created_at" | "updated_at" | "trip_id" | "costs"
+    >
   ) => {
     if (!trip) return;
 
-    // Giả lập thêm route vào mock data
     const newId = `r${trip.routes.length + 1}_${Date.now()}`;
     const now = new Date();
 
-    // Thêm các trường thiếu
     const routeWithId: IRoute = {
       ...newRoute,
       id: newId,
       trip_id: trip.id,
+      costs: [], // Khởi tạo mảng chi phí rỗng
       created_at: now,
       updated_at: now,
     };
 
+    const updatedRoutes = [...trip.routes, routeWithId];
+
     setTrip({
       ...trip,
-      routes: [...trip.routes, routeWithId],
+      routes: updatedRoutes,
+      spent_amount: calculateSpentAmount(updatedRoutes),
     });
 
     setIsAddingRoute(false);
   };
 
-  // Các hàm phụ trợ
-  const formatCurrency = (amount: number) => {
-    return amount.toLocaleString("vi-VN", {
-      style: "currency",
-      currency: "VND",
+  // --- HÀM QUẢN LÝ CHI PHÍ MỚI ---
+
+  // 1. Thêm Cost
+  const handleAddCost = (
+    routeId: string,
+    newCost: Omit<ICost, "id" | "created_at" | "updated_at" | "route_id">
+  ) => {
+    if (!trip) return;
+
+    const now = new Date();
+    const newCostId = `c${Date.now()}_${Math.random()
+      .toString(36)
+      .substring(2, 9)}`;
+
+    const costWithId: ICost = {
+      ...newCost,
+      id: newCostId,
+      route_id: routeId,
+      created_at: now,
+      updated_at: now,
+    };
+
+    const updatedRoutes = trip.routes.map((route) => {
+      if (route.id === routeId) {
+        return {
+          ...route,
+          costs: [...route.costs, costWithId],
+        };
+      }
+      return route;
+    });
+
+    setTrip({
+      ...trip,
+      routes: updatedRoutes,
+      spent_amount: calculateSpentAmount(updatedRoutes),
     });
   };
 
+  // 2. Xóa Cost
+  const handleDeleteCost = (routeId: string, costId: string) => {
+    if (!trip) return;
+
+    const updatedRoutes = trip.routes.map((route) => {
+      if (route.id === routeId) {
+        return {
+          ...route,
+          costs: route.costs.filter((cost) => cost.id !== costId),
+        };
+      }
+      return route;
+    });
+
+    setTrip({
+      ...trip,
+      routes: updatedRoutes,
+      spent_amount: calculateSpentAmount(updatedRoutes),
+    });
+  };
+
+  // Các hàm phụ trợ
   const getStatusColor = (status: string) => {
     switch (status) {
       case "planning":
@@ -422,7 +321,7 @@ export const DetailTrip: React.FC<DetailTripProps> = ({ params }) => {
     <div className="min-h-screen bg-background relative">
       {/* Component Thêm Route (Dạng Modal/Side Panel) */}
       {isAddingRoute && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex justify-center items-center">
+        <div className="fixed inset-0 z-50 bg-black/50 flex justify-center items-center p-4">
           <AddRouteForm
             onClose={() => setIsAddingRoute(false)}
             onSubmit={handleAddNewRoute}
@@ -471,33 +370,33 @@ export const DetailTrip: React.FC<DetailTripProps> = ({ params }) => {
               </h2>
               <div className="space-y-3 text-sm">
                 <p className="flex justify-between items-center text-foreground">
-                  **Địa điểm:** <span>{trip.destination}</span>
+                  Địa điểm: <span>{trip.destination}</span>
                 </p>
                 <p className="flex justify-between items-center text-foreground">
-                  **Khởi hành:** <span>{trip.departure}</span>
+                  Khởi hành: <span>{trip.departure}</span>
                 </p>
                 <p className="flex justify-between items-center text-foreground">
-                  **Ngày đi:**{" "}
+                  Ngày đi:{" "}
                   <span className="flex items-center">
                     <Calendar className="w-4 h-4 mr-1" />{" "}
                     {new Date(trip.start_date).toLocaleDateString("vi-VN")}
                   </span>
                 </p>
                 <p className="flex justify-between items-center text-foreground">
-                  **Ngày về:**{" "}
+                  Ngày về:{" "}
                   <span className="flex items-center">
                     <Calendar className="w-4 h-4 mr-1" />{" "}
                     {new Date(trip.end_date).toLocaleDateString("vi-VN")}
                   </span>
                 </p>
                 <p className="flex justify-between items-center text-foreground">
-                  **Thành viên:**{" "}
+                  Thành viên:{" "}
                   <span className="flex items-center">
                     <Users className="w-4 h-4 mr-1" /> {trip.members}
                   </span>
                 </p>
                 <p className="flex justify-between items-center text-foreground">
-                  **Mức độ khó:**{" "}
+                  Mức độ khó:{" "}
                   <span className="font-semibold text-traveller">
                     {trip.difficult}/5
                   </span>
@@ -522,7 +421,13 @@ export const DetailTrip: React.FC<DetailTripProps> = ({ params }) => {
                   </p>
                   <p className="flex justify-between text-muted-foreground mt-2 border-t pt-2 border-border">
                     Còn lại:{" "}
-                    <span>
+                    <span
+                      className={
+                        trip.total_budget - trip.spent_amount < 0
+                          ? "text-red-600 font-semibold"
+                          : ""
+                      }
+                    >
                       {formatCurrency(trip.total_budget - trip.spent_amount)}
                     </span>
                   </p>
@@ -530,7 +435,7 @@ export const DetailTrip: React.FC<DetailTripProps> = ({ params }) => {
 
                 <div className="mt-4">
                   <p className="text-sm mb-1 text-muted-foreground">
-                    Tiến độ chi tiêu: **{budgetUsage.toFixed(1)}%**
+                    Tiến độ chi tiêu: {budgetUsage.toFixed(1)}%
                   </p>
                   <div className="w-full bg-muted rounded-full h-3">
                     <div
@@ -540,7 +445,7 @@ export const DetailTrip: React.FC<DetailTripProps> = ({ params }) => {
                       style={{ width: `${budgetUsage}%` }}
                     ></div>
                   </div>
-                  {budgetUsage > 100 && (
+                  {trip.total_budget - trip.spent_amount < 0 && (
                     <p className="text-xs text-destructive mt-1">
                       Đã vượt ngân sách!
                     </p>
@@ -550,7 +455,7 @@ export const DetailTrip: React.FC<DetailTripProps> = ({ params }) => {
             </div>
           </div>
 
-          {/* Cột Phải: Lịch trình chi tiết (Hiển thị danh sách Route phẳng) */}
+          {/* Cột Phải: Lịch trình chi tiết */}
           <div className="lg:col-span-2">
             <div className="flex justify-between items-center mb-6 border-b pb-2">
               <h2 className="text-2xl font-bold text-foreground flex items-center">
@@ -566,49 +471,16 @@ export const DetailTrip: React.FC<DetailTripProps> = ({ params }) => {
             </div>
 
             <div className="space-y-4">
-              {trip.routes.map((route: IRoute) => (
-                <div
-                  key={route.id}
-                  className="bg-card p-5 rounded-xl shadow-md border border-border transition-shadow hover:shadow-lg"
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="text-xl font-bold text-foreground">
-                      <Route className="inline w-5 h-5 mr-2 text-traveller" />
-                      Chặng {route.index}: {route.title}
-                    </h3>
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-trip/10 text-trip">
-                      Index {route.index}
-                    </span>
-                  </div>
-                  <p className="text-sm text-muted-foreground mb-3">
-                    {route.description}
-                  </p>
-
-                  {/* Tọa độ */}
-                  <div className="text-sm text-muted-foreground mb-3 p-3 bg-muted rounded-md border border-border">
-                    <h4 className="font-semibold text-foreground mb-1 flex items-center">
-                      <Navigation className="w-4 h-4 mr-1" /> Tọa độ:
-                    </h4>
-                    <p>
-                      **Bắt đầu:** Lat: **{route.latStart}**, Lng: **
-                      {route.lngStart}**
-                    </p>
-                    <p>
-                      **Kết thúc:** Lat: **{route.latEnd}**, Lng: **
-                      {route.lngEnd}**
-                    </p>
-                  </div>
-
-                  <h4 className="font-semibold text-sm text-foreground/80 mb-1">
-                    Hoạt động:
-                  </h4>
-                  <ul className="list-disc list-inside text-muted-foreground text-sm space-y-1 ml-4">
-                    {route.details.map((detail: string, i: number) => (
-                      <li key={i}>{detail}</li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
+              {trip.routes
+                .sort((a, b) => a.index - b.index) // Sắp xếp theo Index
+                .map((route: IRoute) => (
+                  <RouteCard
+                    key={route.id}
+                    route={route}
+                    onAddCost={handleAddCost}
+                    onDeleteCost={handleDeleteCost}
+                  />
+                ))}
             </div>
           </div>
         </div>

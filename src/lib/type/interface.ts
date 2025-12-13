@@ -31,16 +31,45 @@ export interface ITrip {
   updated_at: Date;
 }
 
+export interface ICost {
+  id?: string;
+  route_id: string;
+  description: string;
+  amount: number;
+  currency: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
 export interface IRoute {
   id?: string;
   index: number;
   trip_id: string;
   title: string;
   description: string;
-  lngStart: number; // Kinh độ điểm bắt đầu
-  latStart: number; // Vĩ độ điểm bắt đầu
-  lngEnd: number; // Kinh độ điểm kết thúc
-  latEnd: number; // Vĩ độ điểm kết thúc
+  lngStart: number;
+  latStart: number;
+  lngEnd: number;
+  latEnd: number;
+  details: string[];
+  costs: ICost[]; // ĐÃ THÊM: Danh sách chi phí
   created_at: Date;
   updated_at: Date;
+}
+
+export interface TripDetail {
+  id: string;
+  title: string;
+  description: string;
+  departure: string;
+  destination: string;
+  start_date: string;
+  end_date: string;
+  difficult: number;
+  total_budget: number;
+  spent_amount: number;
+  status: "planning" | "ongoing" | "completed" | "cancelled";
+  currency: string;
+  members: number;
+  routes: IRoute[];
 }
