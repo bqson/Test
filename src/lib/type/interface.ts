@@ -72,4 +72,5 @@ export interface TripDetail {
   currency: string;
   members: number;
   routes: IRoute[];
+  distance: number;
 }

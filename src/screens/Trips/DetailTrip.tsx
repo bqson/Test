@@ -13,139 +13,32 @@ import {
   PlusCircle,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { AddRouteForm } from "./AddRouteForm"; // Import AddRouteForm
+import { AddRouteForm } from "./AddRouteForm";
 import { ICost, IRoute, TripDetail } from "@/lib/type/interface";
 import { RouteCard } from "@/components/Route/RouteCard";
 
-// --- MOCK DATA VÀ UTILS ---
-const mockDate = new Date();
-
-// Hàm giả lập tính toán lại tổng chi tiêu của chuyến đi
+// Hàm tính toán tổng chi tiêu của chuyến đi
 const calculateSpentAmount = (routes: IRoute[]): number => {
+  if (!routes || routes.length === 0) return 0;
+
   return routes.reduce((sumRoute, route) => {
+    if (!route.costs || route.costs.length === 0) return sumRoute;
+
     const routeCost = route.costs.reduce(
-      (sumCost, cost) => sumCost + cost.amount,
+      (sumCost, cost) => sumCost + (cost.amount || 0),
       0
     );
     return sumRoute + routeCost;
   }, 0);
 };
 
-// Hàm tiện ích formatCurrency
-const formatCurrency = (amount: number) => {
-  return amount.toLocaleString("vi-VN", {
+// Hàm tiện ích formatCurrency với xử lý null/undefined
+const formatCurrency = (amount: number | null | undefined) => {
+  const value = amount || 0;
+  return value.toLocaleString("vi-VN", {
     style: "currency",
     currency: "VND",
     maximumFractionDigits: 0,
-  });
-};
-
-// Dữ liệu Mock đã cập nhật để bao gồm costs
-const MOCK_DETAIL_TRIPS: TripDetail[] = [
-  {
-    id: "mock_trip_1",
-    title: "Khám phá Vịnh Hạ Long",
-    description:
-      "Chuyến đi 3 ngày 2 đêm khám phá kỳ quan thiên nhiên thế giới, bao gồm chèo thuyền kayak và ngủ đêm trên du thuyền.",
-    departure: "Hà Nội",
-    destination: "Vịnh Hạ Long",
-    start_date: "2025-01-15",
-    end_date: "2025-01-17",
-    difficult: 2,
-    total_budget: 15000000,
-    spent_amount: 4500000, // Sẽ được tính lại bằng calculateSpentAmount
-    status: "ongoing",
-    currency: "VND",
-    members: 4,
-    routes: [
-      {
-        id: "r1_1",
-        index: 1,
-        trip_id: "mock_trip_1",
-        title: "Hà Nội - Du thuyền Hạ Long",
-        description: "Di chuyển từ thủ đô ra Hạ Long và lên du thuyền.",
-        lngStart: 105.854,
-        latStart: 21.028,
-        lngEnd: 107.031,
-        latEnd: 20.912,
-        details: [
-          "Di chuyển từ Hà Nội",
-          "Nhận phòng du thuyền",
-          "Ăn trưa & thăm quan Hang Sửng Sốt",
-        ],
-        costs: [
-          {
-            id: "c1_1_1",
-            route_id: "r1_1",
-            description: "Xe bus Hà Nội - Hạ Long",
-            amount: 500000,
-            currency: "VND",
-            created_at: mockDate,
-            updated_at: mockDate,
-          },
-          {
-            id: "c1_1_2",
-            route_id: "r1_1",
-            description: "Phí Du thuyền/Ăn trưa (Ngày 1)",
-            amount: 4000000,
-            currency: "VND",
-            created_at: mockDate,
-            updated_at: mockDate,
-          },
-        ],
-        created_at: mockDate,
-        updated_at: mockDate,
-      },
-      {
-        id: "r1_2",
-        index: 2,
-        trip_id: "mock_trip_1",
-        title: "Khám phá Lan Hạ và Kayak",
-        description: "Hoạt động chính trong ngày là chèo kayak và học nấu ăn.",
-        lngStart: 107.031,
-        latStart: 20.912,
-        lngEnd: 107.025,
-        latEnd: 20.8,
-        details: [
-          "Ngắm bình minh",
-          "Chèo thuyền kayak tại Vịnh Lan Hạ",
-          "Lớp học nấu ăn Việt Nam",
-        ],
-        costs: [],
-        created_at: mockDate,
-        updated_at: mockDate,
-      },
-      {
-        id: "r1_3",
-        index: 3,
-        trip_id: "mock_trip_1",
-        title: "Du thuyền - Trở về Hà Nội",
-        description: "Ăn sáng và trở về đất liền, kết thúc chuyến đi.",
-        lngStart: 107.025,
-        latStart: 20.8,
-        lngEnd: 105.854,
-        latEnd: 21.028,
-        details: ["Ăn sáng cuối cùng", "Trở về Hà Nội"],
-        costs: [],
-        created_at: mockDate,
-        updated_at: mockDate,
-      },
-    ],
-  },
-  // THÊM CÁC TRIP KHÁC VÀO ĐÂY (VỚI routes[].costs: [])
-];
-
-// Hàm giả lập fetch trip
-const fetchTripDetail = (id: string): Promise<TripDetail | undefined> => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const trip = MOCK_DETAIL_TRIPS.find((t) => t.id === id);
-      if (trip) {
-        // Cập nhật spent_amount dựa trên costs trong mock data
-        trip.spent_amount = calculateSpentAmount(trip.routes);
-      }
-      resolve(trip);
-    }, 500);
   });
 };
 
@@ -164,115 +57,235 @@ export const DetailTrip: React.FC<DetailTripProps> = ({ params }) => {
 
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [loading, setLoading] = useState(isValidId);
+  const [error, setError] = useState<string | null>(null);
   const [isAddingRoute, setIsAddingRoute] = useState(false);
 
+  const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+  // Fetch trip detail từ API
   useEffect(() => {
-    if (isValidId) {
-      const loadTrip = async () => {
-        const data = await fetchTripDetail(tripId);
-        setTrip(data || null);
+    const fetchTripDetail = async () => {
+      if (!isValidId || !API_URL) {
         setLoading(false);
-      };
-      loadTrip();
-    } else {
-      setLoading(false);
-      setTrip(null);
-    }
-  }, [tripId, isValidId]);
+        setTrip(null);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const response = await fetch(`${API_URL}/trips/${tripId}`, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch trip (Status: ${response.status})`);
+        }
+
+        const result = await response.json();
+        let tripData: TripDetail = result.data || result;
+
+        // Đảm bảo các giá trị số không null/undefined
+        tripData = {
+          ...tripData,
+          total_budget: tripData.total_budget || 0,
+          spent_amount: tripData.spent_amount || 0,
+          distance: tripData.distance || 0,
+          difficult: tripData.difficult || 1,
+        };
+
+        // Đảm bảo routes và costs được khởi tạo
+        if (!tripData.routes) {
+          tripData.routes = [];
+        } else {
+          // Đảm bảo mỗi route có mảng costs
+          tripData.routes = tripData.routes.map((route) => ({
+            ...route,
+            costs: route.costs || [],
+          }));
+        }
+
+        // Tính toán spent_amount từ costs
+        const calculatedSpent = calculateSpentAmount(tripData.routes);
+        tripData.spent_amount = calculatedSpent;
+
+        console.log("Trip data loaded:", tripData); // Debug log
+
+        setTrip(tripData);
+      } catch (err) {
+        console.error("Error fetching trip detail:", err);
+        setError(
+          err instanceof Error ? err.message : "Failed to load trip details"
+        );
+        setTrip(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTripDetail();
+  }, [tripId, isValidId, API_URL]);
 
   // Hàm xử lý khi thêm Route mới
-  const handleAddNewRoute = (
+  const handleAddNewRoute = async (
     newRoute: Omit<
       IRoute,
       "id" | "created_at" | "updated_at" | "trip_id" | "costs"
     >
   ) => {
-    if (!trip) return;
+    if (!trip || !API_URL) return;
 
-    const newId = `r${trip.routes.length + 1}_${Date.now()}`;
-    const now = new Date();
+    try {
+      const routePayload = {
+        ...newRoute,
+        trip_id: trip.id,
+      };
 
-    const routeWithId: IRoute = {
-      ...newRoute,
-      id: newId,
-      trip_id: trip.id,
-      costs: [], // Khởi tạo mảng chi phí rỗng
-      created_at: now,
-      updated_at: now,
-    };
+      const response = await fetch(`${API_URL}/routes`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(routePayload),
+      });
 
-    const updatedRoutes = [...trip.routes, routeWithId];
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to create route");
+      }
 
-    setTrip({
-      ...trip,
-      routes: updatedRoutes,
-      spent_amount: calculateSpentAmount(updatedRoutes),
-    });
+      const result = await response.json();
+      const createdRoute: IRoute = result.data || result;
 
-    setIsAddingRoute(false);
+      // Đảm bảo route có mảng costs
+      if (!createdRoute.costs) {
+        createdRoute.costs = [];
+      }
+
+      const updatedRoutes = [...trip.routes, createdRoute];
+
+      setTrip({
+        ...trip,
+        routes: updatedRoutes,
+        spent_amount: calculateSpentAmount(updatedRoutes),
+      });
+
+      setIsAddingRoute(false);
+    } catch (err) {
+      console.error("Error creating route:", err);
+      alert(
+        `Failed to create route: ${
+          err instanceof Error ? err.message : "Unknown error"
+        }`
+      );
+    }
   };
 
-  // --- HÀM QUẢN LÝ CHI PHÍ MỚI ---
+  // --- HÀM QUẢN LÝ CHI PHÍ ---
 
   // 1. Thêm Cost
-  const handleAddCost = (
+  const handleAddCost = async (
     routeId: string,
     newCost: Omit<ICost, "id" | "created_at" | "updated_at" | "route_id">
   ) => {
-    if (!trip) return;
+    if (!trip || !API_URL) return;
 
-    const now = new Date();
-    const newCostId = `c${Date.now()}_${Math.random()
-      .toString(36)
-      .substring(2, 9)}`;
+    try {
+      const costPayload = {
+        ...newCost,
+        route_id: routeId,
+      };
 
-    const costWithId: ICost = {
-      ...newCost,
-      id: newCostId,
-      route_id: routeId,
-      created_at: now,
-      updated_at: now,
-    };
+      const response = await fetch(`${API_URL}/costs`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(costPayload),
+      });
 
-    const updatedRoutes = trip.routes.map((route) => {
-      if (route.id === routeId) {
-        return {
-          ...route,
-          costs: [...route.costs, costWithId],
-        };
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to create cost");
       }
-      return route;
-    });
 
-    setTrip({
-      ...trip,
-      routes: updatedRoutes,
-      spent_amount: calculateSpentAmount(updatedRoutes),
-    });
+      const result = await response.json();
+      const createdCost: ICost = result.data || result;
+
+      const updatedRoutes = trip.routes.map((route) => {
+        if (route.id === routeId) {
+          return {
+            ...route,
+            costs: [...route.costs, createdCost],
+          };
+        }
+        return route;
+      });
+
+      setTrip({
+        ...trip,
+        routes: updatedRoutes,
+        spent_amount: calculateSpentAmount(updatedRoutes),
+      });
+    } catch (err) {
+      console.error("Error creating cost:", err);
+      alert(
+        `Failed to add cost: ${
+          err instanceof Error ? err.message : "Unknown error"
+        }`
+      );
+    }
   };
 
   // 2. Xóa Cost
-  const handleDeleteCost = (routeId: string, costId: string) => {
-    if (!trip) return;
+  const handleDeleteCost = async (routeId: string, costId: string) => {
+    if (!trip || !API_URL) return;
 
-    const updatedRoutes = trip.routes.map((route) => {
-      if (route.id === routeId) {
-        return {
-          ...route,
-          costs: route.costs.filter((cost) => cost.id !== costId),
-        };
+    if (!confirm("Are you sure you want to delete this cost?")) return;
+
+    try {
+      const response = await fetch(`${API_URL}/costs/${costId}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to delete cost");
       }
-      return route;
-    });
 
-    setTrip({
-      ...trip,
-      routes: updatedRoutes,
-      spent_amount: calculateSpentAmount(updatedRoutes),
-    });
+      const updatedRoutes = trip.routes.map((route) => {
+        if (route.id === routeId) {
+          return {
+            ...route,
+            costs: route.costs.filter((cost) => cost.id !== costId),
+          };
+        }
+        return route;
+      });
+
+      setTrip({
+        ...trip,
+        routes: updatedRoutes,
+        spent_amount: calculateSpentAmount(updatedRoutes),
+      });
+    } catch (err) {
+      console.error("Error deleting cost:", err);
+      alert(
+        `Failed to delete cost: ${
+          err instanceof Error ? err.message : "Unknown error"
+        }`
+      );
+    }
   };
 
-  // Các hàm phụ trợ
+  // Hàm lấy màu status
   const getStatusColor = (status: string) => {
     switch (status) {
       case "planning":
@@ -288,6 +301,7 @@ export const DetailTrip: React.FC<DetailTripProps> = ({ params }) => {
     }
   };
 
+  // Loading state
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -296,6 +310,25 @@ export const DetailTrip: React.FC<DetailTripProps> = ({ params }) => {
     );
   }
 
+  // Error state
+  if (error) {
+    return (
+      <div className="text-center py-20">
+        <h1 className="text-3xl font-bold text-destructive mb-4">
+          Error Loading Trip
+        </h1>
+        <p className="text-muted-foreground mb-6">{error}</p>
+        <button
+          onClick={() => router.push("/trips")}
+          className="text-trip hover:underline flex items-center justify-center mx-auto"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" /> Quay lại danh sách chuyến đi
+        </button>
+      </div>
+    );
+  }
+
+  // Trip not found
   if (!trip) {
     return (
       <div className="text-center py-20">
@@ -312,10 +345,11 @@ export const DetailTrip: React.FC<DetailTripProps> = ({ params }) => {
     );
   }
 
-  const budgetUsage = Math.min(
-    (trip.spent_amount / trip.total_budget) * 100,
-    100
-  );
+  // Tính toán budget usage với xử lý an toàn
+  const totalBudget = trip.total_budget || 0;
+  const spentAmount = trip.spent_amount || 0;
+  const budgetUsage =
+    totalBudget > 0 ? Math.min((spentAmount / totalBudget) * 100, 100) : 0;
 
   return (
     <div className="min-h-screen bg-background relative">
@@ -345,19 +379,21 @@ export const DetailTrip: React.FC<DetailTripProps> = ({ params }) => {
           </button>
           <div className="flex justify-between items-center">
             <h1 className="text-4xl font-extrabold text-foreground">
-              {trip.title}
+              {trip.title || "Untitled Trip"}
             </h1>
             <span
               className={`text-sm font-semibold px-3 py-1 rounded-full ${getStatusColor(
                 trip.status
               )}`}
             >
-              {trip.status.toUpperCase()}
+              {(trip.status || "planning").toUpperCase()}
             </span>
           </div>
-          <p className="text-lg text-muted-foreground mt-2">
-            {trip.description}
-          </p>
+          {trip.description && (
+            <p className="text-lg text-muted-foreground mt-2">
+              {trip.description}
+            </p>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -370,37 +406,49 @@ export const DetailTrip: React.FC<DetailTripProps> = ({ params }) => {
               </h2>
               <div className="space-y-3 text-sm">
                 <p className="flex justify-between items-center text-foreground">
-                  Địa điểm: <span>{trip.destination}</span>
+                  Địa điểm:{" "}
+                  <span>
+                    {trip.destination?.name || trip.destination || "N/A"}
+                  </span>
                 </p>
                 <p className="flex justify-between items-center text-foreground">
-                  Khởi hành: <span>{trip.departure}</span>
+                  Khởi hành: <span>{trip.departure || "N/A"}</span>
                 </p>
                 <p className="flex justify-between items-center text-foreground">
                   Ngày đi:{" "}
                   <span className="flex items-center">
                     <Calendar className="w-4 h-4 mr-1" />{" "}
-                    {new Date(trip.start_date).toLocaleDateString("vi-VN")}
+                    {trip.start_date
+                      ? new Date(trip.start_date).toLocaleDateString("vi-VN")
+                      : "N/A"}
                   </span>
                 </p>
                 <p className="flex justify-between items-center text-foreground">
                   Ngày về:{" "}
                   <span className="flex items-center">
                     <Calendar className="w-4 h-4 mr-1" />{" "}
-                    {new Date(trip.end_date).toLocaleDateString("vi-VN")}
+                    {trip.end_date
+                      ? new Date(trip.end_date).toLocaleDateString("vi-VN")
+                      : "N/A"}
                   </span>
                 </p>
                 <p className="flex justify-between items-center text-foreground">
                   Thành viên:{" "}
                   <span className="flex items-center">
-                    <Users className="w-4 h-4 mr-1" /> {trip.members}
+                    <Users className="w-4 h-4 mr-1" /> {trip.members || "N/A"}
                   </span>
                 </p>
                 <p className="flex justify-between items-center text-foreground">
                   Mức độ khó:{" "}
                   <span className="font-semibold text-traveller">
-                    {trip.difficult}/5
+                    {trip.difficult || 1}/5
                   </span>
                 </p>
+                {trip.distance && trip.distance > 0 && (
+                  <p className="flex justify-between items-center text-foreground">
+                    Khoảng cách: <span>{trip.distance} km</span>
+                  </p>
+                )}
               </div>
             </div>
 
@@ -412,23 +460,21 @@ export const DetailTrip: React.FC<DetailTripProps> = ({ params }) => {
               <div className="space-y-3">
                 <div className="text-sm">
                   <p className="flex justify-between font-medium text-foreground">
-                    Ngân sách tổng:{" "}
-                    <span>{formatCurrency(trip.total_budget)}</span>
+                    Ngân sách tổng: <span>{formatCurrency(totalBudget)}</span>
                   </p>
                   <p className="flex justify-between font-medium text-destructive">
-                    Đã chi tiêu:{" "}
-                    <span>{formatCurrency(trip.spent_amount)}</span>
+                    Đã chi tiêu: <span>{formatCurrency(spentAmount)}</span>
                   </p>
                   <p className="flex justify-between text-muted-foreground mt-2 border-t pt-2 border-border">
                     Còn lại:{" "}
                     <span
                       className={
-                        trip.total_budget - trip.spent_amount < 0
+                        totalBudget - spentAmount < 0
                           ? "text-red-600 font-semibold"
                           : ""
                       }
                     >
-                      {formatCurrency(trip.total_budget - trip.spent_amount)}
+                      {formatCurrency(totalBudget - spentAmount)}
                     </span>
                   </p>
                 </div>
@@ -439,13 +485,13 @@ export const DetailTrip: React.FC<DetailTripProps> = ({ params }) => {
                   </p>
                   <div className="w-full bg-muted rounded-full h-3">
                     <div
-                      className={`rounded-full h-3 ${
+                      className={`rounded-full h-3 transition-all ${
                         budgetUsage > 100 ? "bg-destructive" : "bg-trip"
                       }`}
-                      style={{ width: `${budgetUsage}%` }}
+                      style={{ width: `${Math.min(budgetUsage, 100)}%` }}
                     ></div>
                   </div>
-                  {trip.total_budget - trip.spent_amount < 0 && (
+                  {totalBudget - spentAmount < 0 && (
                     <p className="text-xs text-destructive mt-1">
                       Đã vượt ngân sách!
                     </p>
@@ -471,16 +517,25 @@ export const DetailTrip: React.FC<DetailTripProps> = ({ params }) => {
             </div>
 
             <div className="space-y-4">
-              {trip.routes
-                .sort((a, b) => a.index - b.index) // Sắp xếp theo Index
-                .map((route: IRoute) => (
-                  <RouteCard
-                    key={route.id}
-                    route={route}
-                    onAddCost={handleAddCost}
-                    onDeleteCost={handleDeleteCost}
-                  />
-                ))}
+              {trip.routes && trip.routes.length > 0 ? (
+                trip.routes
+                  .sort((a, b) => a.index - b.index)
+                  .map((route: IRoute) => (
+                    <RouteCard
+                      key={route.id}
+                      route={route}
+                      onAddCost={handleAddCost}
+                      onDeleteCost={handleDeleteCost}
+                    />
+                  ))
+              ) : (
+                <div className="text-center py-12 bg-card rounded-lg border border-border">
+                  <Activity className="w-12 h-12 text-muted-foreground/50 mx-auto mb-4" />
+                  <p className="text-muted-foreground">
+                    Chưa có chặng đường nào. Hãy thêm chặng đầu tiên!
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>

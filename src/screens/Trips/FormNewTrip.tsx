@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { X, Loader2, MapPin } from "lucide-react";
+import { X, Loader2, MapPin, DollarSign } from "lucide-react"; // Thêm DollarSign icon
 import { ITrip } from "./Trips";
 import { useAuth } from "../../contexts/AuthContext";
 
@@ -37,6 +37,22 @@ const TRIP_STATUS_OPTIONS: ITrip["status"][] = [
   "cancelled",
 ];
 
+// Định nghĩa các mức Budget gợi ý (Đơn vị: VND)
+const BUDGET_SUGGESTIONS = [
+  { value: 1000000, label: "1M VND" },
+  { value: 2000000, label: "2M VND" },
+  { value: 3000000, label: "3M VND" },
+  { value: 5000000, label: "5M VND" },
+];
+
+// Hàm format tiền tệ (cho nhãn nút gợi ý)
+const formatVNDLabel = (amount: number): string => {
+  if (amount >= 1000000) {
+    return `${amount / 1000000}M VND`;
+  }
+  return `${amount.toLocaleString("vi-VN")} VND`;
+};
+
 export const FormNewTrip: React.FC<FormNewTripProps> = ({
   isOpen,
   onClose,
@@ -55,7 +71,7 @@ export const FormNewTrip: React.FC<FormNewTripProps> = ({
     departure: "",
     difficult: 1,
     spent_amount: 0,
-    status: "planning", // Giữ giá trị mặc định là 'planning'
+    status: "planning",
   });
 
   const [destinations, setDestinations] = useState<IDestination[]>([]);
@@ -79,7 +95,7 @@ export const FormNewTrip: React.FC<FormNewTripProps> = ({
         departure: "",
         difficult: 1,
         spent_amount: 0,
-        status: "planning", // Đảm bảo reset status về planning
+        status: "planning",
       });
       setError(null);
       fetchDestinations();
@@ -112,7 +128,8 @@ export const FormNewTrip: React.FC<FormNewTripProps> = ({
       if (result.data && Array.isArray(result.data)) {
         setDestinations(result.data);
       } else {
-        throw new Error("Invalid response format from destinations API");
+        // Xử lý trường hợp API trả về dữ liệu không hợp lệ
+        setDestinations(Array.isArray(result) ? result : []);
       }
     } catch (err: any) {
       console.error("Error fetching destinations:", err);
@@ -130,11 +147,19 @@ export const FormNewTrip: React.FC<FormNewTripProps> = ({
     const { name, value, type } = e.target;
     setFormData((prev) => ({
       ...prev,
-      // Xử lý status: đảm bảo giá trị là string, không cần parseFloat
+      // Xử lý chuyển đổi sang số cho các trường số (bao gồm total_budget)
       [name]:
         name === "total_budget" || name === "distance" || name === "difficult"
-          ? parseFloat(value) || 0
+          ? parseFloat(value) || 0 // Đảm bảo giá trị là số
           : value,
+    }));
+  };
+
+  // HÀM MỚI: Xử lý khi click vào các nút gợi ý Budget
+  const handleSuggestBudget = (amount: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      total_budget: amount,
     }));
   };
 
@@ -161,6 +186,13 @@ export const FormNewTrip: React.FC<FormNewTripProps> = ({
       return;
     }
 
+    // Kiểm tra budget tối thiểu (tùy chọn, thêm để tránh 0)
+    if ((formData.total_budget || 0) <= 0) {
+      setError("Total Budget must be greater than 0.");
+      setLoading(false);
+      return;
+    }
+
     try {
       // Chuẩn bị payload cho Trip
       const tripPayload: Omit<
@@ -172,16 +204,16 @@ export const FormNewTrip: React.FC<FormNewTripProps> = ({
         | "currency"
         | "destination"
       > = {
-        title: formData.title!,
-        destination_id: formData.destination_id!,
-        description: formData.description!,
-        departure: formData.departure!,
-        distance: formData.distance!,
-        start_date: formData.start_date!,
-        end_date: formData.end_date!,
-        difficult: formData.difficult!,
-        total_budget: formData.total_budget!,
-        status: formData.status || "planning", // Bổ sung status từ form
+        title: formData.title || "", // Đảm bảo có giá trị mặc định nếu cần
+        destination_id: formData.destination_id || "",
+        description: formData.description || "",
+        departure: formData.departure || "",
+        distance: formData.distance || 0,
+        start_date: formData.start_date || "",
+        end_date: formData.end_date || "",
+        difficult: formData.difficult || 1,
+        total_budget: formData.total_budget || 0,
+        status: formData.status || "planning",
       };
 
       // Bước 1: Tạo Trip
@@ -202,8 +234,6 @@ export const FormNewTrip: React.FC<FormNewTripProps> = ({
       }
 
       const tripResult = await tripResponse.json();
-
-      // API trả về {status, message, data: {...}}
       const createdTrip: ITrip = tripResult.data || tripResult;
 
       if (!createdTrip.id) {
@@ -222,8 +252,7 @@ export const FormNewTrip: React.FC<FormNewTripProps> = ({
       );
 
       if (!joinTripResponse.ok) {
-        // Nếu thêm user vào trip thất bại, nên xóa trip đã tạo (rollback)
-        // Lưu ý: Cần đảm bảo API cho phép DELETE trip mà không cần join_trip
+        // Rollback nếu thêm user thất bại
         await fetch(`${API_URL}/trips/${createdTrip.id}`, {
           method: "DELETE",
         });
@@ -392,28 +421,45 @@ export const FormNewTrip: React.FC<FormNewTripProps> = ({
               />
             </div>
 
-            {/* Total Budget */}
-            <div>
+            {/* Total Budget (CÓ THAY ĐỔI) */}
+            <div className="col-span-2">
               <label
                 htmlFor="total_budget"
                 className="block text-sm font-medium text-foreground mb-1"
               >
+                <DollarSign className="w-4 h-4 mr-2 inline-block text-green-500" />
                 Total Budget (VND)
               </label>
               <input
                 id="total_budget"
                 name="total_budget"
                 type="number"
-                value={formData.total_budget}
+                value={formData.total_budget || ""} // Hiển thị 0 là chuỗi rỗng để tránh "0"
                 onChange={handleChange}
                 required
                 min="0"
                 disabled={isFormDisabled}
+                placeholder="e.g., 5000000"
                 className="w-full p-3 border border-border rounded-lg bg-input text-foreground focus:ring-trip focus:border-trip transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               />
+
+              {/* Nút gợi ý Budget (MỚI) */}
+              <div className="mt-2 flex flex-wrap gap-2">
+                {BUDGET_SUGGESTIONS.map((suggestion) => (
+                  <button
+                    key={suggestion.value}
+                    type="button"
+                    onClick={() => handleSuggestBudget(suggestion.value)}
+                    disabled={isFormDisabled}
+                    className="text-xs px-3 py-1.5 rounded-full border border-blue-500/50 bg-blue-500/10 text-blue-500 hover:bg-blue-500 hover:text-white transition-colors disabled:opacity-50"
+                  >
+                    {formatVNDLabel(suggestion.value)}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {/* Status Select (MỚI) */}
+            {/* Status Select */}
             <div>
               <label
                 htmlFor="status"
@@ -438,7 +484,7 @@ export const FormNewTrip: React.FC<FormNewTripProps> = ({
               </select>
             </div>
 
-            {/* Difficulty (Di chuyển xuống hàng dưới) */}
+            {/* Difficulty */}
             <div>
               <label
                 htmlFor="difficult"
