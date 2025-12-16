@@ -2,171 +2,262 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import Link from "next/link";
-import { Plus, Calendar, DollarSign, MapPin } from "lucide-react";
-import { supabase } from "../../lib/supabase";
+import { Plus, MapPin, Edit, Trash2 } from "lucide-react";
+
 import { useAuth } from "../../contexts/AuthContext";
 import { FormNewTrip } from "./FormNewTrip";
+import { TripCard } from "./TripCard";
+import { EditTripModal } from "./EditTripModal";
 
-// --- MOCK DATA ---
-const MOCK_TRIPS = [
-  {
-    id: "mock_trip_1",
-    uuid: "mock_trip_1",
-    title: "Khám phá Vịnh Hạ Long",
-    description:
-      "Chuyến đi 3 ngày 2 đêm khám phá kỳ quan thiên nhiên thế giới, bao gồm chèo thuyền kayak và ngủ đêm trên du thuyền.",
-    departure: "Hà Nội",
-    destination: "Vịnh Hạ Long",
-    start_date: new Date(2025, 0, 15).toISOString(), // 15/01/2025
-    end_date: new Date(2025, 0, 17).toISOString(), // 17/01/2025
-    difficult: 2,
-    total_budget: 15000000,
-    spent_amount: 8500000,
-    status: "ongoing",
-    currency: "VND",
-    created_at: new Date(2024, 11, 1).toISOString(),
-    routes: null,
-  },
-  {
-    id: "mock_trip_2",
-    uuid: "mock_trip_2",
-    title: "Trekking Fansipan",
-    description:
-      "Thử thách chinh phục nóc nhà Đông Dương trong 4 ngày. Cần chuẩn bị thể lực tốt.",
-    departure: "Sapa",
-    destination: "Fansipan Peak",
-    start_date: new Date(2025, 5, 10).toISOString(),
-    end_date: new Date(2025, 5, 13).toISOString(),
-    difficult: 5,
-    total_budget: 8000000,
-    spent_amount: 0,
-    status: "planning",
-    currency: "VND",
-    created_at: new Date(2024, 11, 5).toISOString(),
-    routes: null,
-  },
-  {
-    id: "mock_trip_3",
-    uuid: "mock_trip_3",
-    title: "Đà Lạt Chill",
-    description:
-      "Nghỉ dưỡng nhẹ nhàng tại thành phố ngàn hoa, thăm quan các vườn dâu và cà phê.",
-    departure: "TP. Hồ Chí Minh",
-    destination: "Đà Lạt",
-    start_date: new Date(2024, 9, 20).toISOString(),
-    end_date: new Date(2024, 9, 24).toISOString(),
-    difficult: 1,
-    total_budget: 6000000,
-    spent_amount: 6300000,
-    status: "completed",
-    currency: "VND",
-    created_at: new Date(2024, 9, 1).toISOString(),
-    routes: null,
-  },
-];
-// --- KẾT THÚC MOCK DATA ---
+// --- INTERFACES ---
+export interface IDestination {
+  id?: string;
+  region_id: string;
+  name: string; // <--- Trường cần lấy
+  country: string;
+  description: string;
+  latitude: number;
+  longitude: number;
+  category: string;
+  best_season: string;
+  rating: number;
+  images: Array<string> | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+export interface ITrip {
+  id?: string;
+  destination_id: string;
+  title: string;
+  description: string;
+  departure: string;
+  distance: number;
+  start_date: string;
+  end_date: string;
+  difficult: number;
+  total_budget: number;
+  spent_amount: number;
+  status: "planning" | "ongoing" | "completed" | "cancelled" | string;
+  created_at: string;
+  updated_at: string;
+  destination?: IDestination; // Thêm '?' vì ban đầu có thể chưa có
+  currency?: string;
+}
+
+export interface IJoinTrip {
+  user_id: string;
+  trip_id: string;
+  created_at: string;
+}
+
+// Hàm fetch chi tiết Destination (MỚI)
+const fetchDestinationDetails = async (
+  API_URL: string,
+  destinationId: string
+): Promise<IDestination | null> => {
+  try {
+    const response = await fetch(`${API_URL}/destinations/${destinationId}`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      console.warn(
+        `Failed to fetch destination ${destinationId} (Status: ${response.status})`
+      );
+      return null;
+    }
+
+    const result = await response.json();
+    // Giả định API trả về { data: IDestination } hoặc trực tiếp IDestination
+    return result.data || result;
+  } catch (error) {
+    console.error(`Error fetching destination ${destinationId}:`, error);
+    return null;
+  }
+};
 
 export const Trips: React.FC = () => {
   const { user } = useAuth();
-  const [trips, setTrips] = useState<any[]>([]);
+
+  const [trips, setTrips] = useState<ITrip[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false); // Trạng thái Modal
+
+  // State cho Modal Add
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
+  // State cho Modal Edit
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedTrip, setSelectedTrip] = useState<ITrip | null>(null);
+
+  const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
   useEffect(() => {
-    if (user) {
-      fetchTrips();
-    } else {
-      // Nếu không có user (chưa đăng nhập hoặc context lỗi), vẫn hiển thị mock
-      setTrips(MOCK_TRIPS);
+    if (API_URL && user?.id) {
+      fetchUserTrips(user.id);
+    } else if (!user) {
       setLoading(false);
     }
-  }, [user]);
+  }, [API_URL, user?.id]);
 
-  const fetchTrips = async () => {
+  /**
+   * Fetch trips của user và sau đó fetch chi tiết destination nếu cần
+   */
+  const fetchUserTrips = async (userId: string) => {
+    if (!API_URL) return;
+    setLoading(true);
+
     try {
-      // Get user's id_user
-      const { data: accountData } = await supabase
-        .from("account")
-        .select("id_user")
-        .eq("email", user!.email || "")
-        .maybeSingle();
+      // 1. Fetch danh sách trips
+      const response = await fetch(`${API_URL}/users/${userId}/trips`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          // Authorization header nếu cần
+        },
+      });
 
-      if (!accountData?.id_user) {
-        // Nếu không tìm thấy user id trong DB
-        setTrips(MOCK_TRIPS);
-        setLoading(false);
-        return;
+      if (!response.ok) {
+        throw new Error(
+          `Failed to fetch user trips (Status: ${response.status})`
+        );
       }
 
-      // Get trips user has joined
-      const { data: joinTrips, error: joinError } = await supabase
-        .from("join_trip")
-        .select("id_trip")
-        .eq("id_user", accountData.id_user);
+      const result = await response.json();
+      let tripsData: ITrip[] = Array.isArray(result.data || result)
+        ? result.data || result
+        : [];
 
-      if (joinError) throw joinError;
+      // 2. Xử lý trường hợp API không nhúng Destination
+      // Nếu tripsData không có trường `destination.name` (hoặc `destination` là null/undefined)
+      // VÀ có destination_id, thì ta tiến hành fetch chi tiết.
+      const tripsToFetchDestination = tripsData.filter(
+        (trip) => !trip.destination && trip.destination_id
+      );
 
-      const tripIds = joinTrips?.map((j) => j.id_trip) || [];
+      if (tripsToFetchDestination.length > 0) {
+        // Tạo một mảng các Promise để fetch chi tiết Destination song song
+        const destinationPromises = tripsToFetchDestination.map((trip) =>
+          fetchDestinationDetails(API_URL, trip.destination_id)
+        );
 
-      if (tripIds.length === 0) {
-        // KHÔNG CÓ CHUYẾN ĐI NÀO ĐƯỢC JOIN => LOAD MOCK TRIP
-        setTrips(MOCK_TRIPS);
-        setLoading(false);
-        return;
+        const destinations = await Promise.all(destinationPromises);
+
+        // Map lại dữ liệu trips với thông tin destination đã fetch
+        tripsData = tripsData.map((trip) => {
+          if (trip.destination) return trip; // Bỏ qua nếu đã có destination (API đã nhúng)
+
+          const destinationIndex = tripsToFetchDestination.findIndex(
+            (t) => t.id === trip.id
+          );
+
+          const destination = destinations[destinationIndex];
+
+          return {
+            ...trip,
+            destination: destination || undefined, // Gắn destination object vào trip
+          } as ITrip;
+        });
       }
 
-      // Get trip details
-      const { data, error } = await supabase
-        .from("trip")
-        .select("*")
-        .in("id_trip", tripIds)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-
-      // Transform data
-      const transformedTrips = (data || []).map((trip: any) => ({
-        ...trip,
-        id: trip.uuid,
-        currency: "VND", // Default currency
-        routes: null,
-      }));
-
-      setTrips(transformedTrips);
+      setTrips(tripsData);
     } catch (error) {
-      console.error("Error fetching trips:", error);
+      console.error("Error fetching user trips:", error);
+      setTrips([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleOpenModal = () => setIsModalOpen(true);
-  const handleCloseModal = () => setIsModalOpen(false);
+  // --- Các Handlers CRUD (giữ nguyên) ---
+  const handleOpenAddModal = () => setIsAddModalOpen(true);
+  const handleCloseAddModal = () => setIsAddModalOpen(false);
 
-  const handleTripCreated = () => {
-    fetchTrips(); // Tải lại danh sách chuyến đi sau khi tạo thành công
+  const handleOpenEditModal = (trip: ITrip) => {
+    setSelectedTrip(trip);
+    setIsEditModalOpen(true);
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "planning":
-        return "bg-users/20 text-users";
-      case "ongoing":
-        return "bg-traveller/20 text-traveller";
-      case "completed":
-        return "bg-muted text-muted-foreground";
-      case "cancelled":
-        return "bg-destructive/20 text-destructive";
-      default:
-        return "bg-muted text-muted-foreground";
+  const handleCloseEditModal = () => {
+    setSelectedTrip(null);
+    setIsEditModalOpen(false);
+  };
+
+  const handleTripActionSuccess = () => {
+    if (user?.id) {
+      fetchUserTrips(user.id);
     }
   };
 
-  if (loading) {
+  const handleDeleteTrip = async (tripId: string) => {
+    if (
+      !API_URL ||
+      !user?.id ||
+      !confirm(`Are you sure you want to delete this trip?`)
+    )
+      return;
+
+    try {
+      setLoading(true);
+
+      // Bước 1: Xóa user khỏi trip (remove join_trip record)
+      const deleteJoinTripResponse = await fetch(
+        `${API_URL}/trips/${tripId}/users/${user.id}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!deleteJoinTripResponse.ok) {
+        console.warn(
+          "Could not remove user from trip (might not be joined). Proceeding to delete trip."
+        );
+      }
+
+      // Bước 2: Xóa trip
+      const deleteTripResponse = await fetch(`${API_URL}/trips/${tripId}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!deleteTripResponse.ok) {
+        const errorText = await deleteTripResponse.text();
+        throw new Error(`Failed to delete trip: ${errorText}`);
+      }
+
+      handleTripActionSuccess();
+    } catch (error) {
+      console.error("Error deleting trip:", error);
+      alert(
+        `Error deleting trip: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- Render Logic (giữ nguyên) ---
+  if (loading || !user?.id) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-trip"></div>
+      <div className="flex justify-center items-center h-screen bg-background">
+        {!user ? (
+          <p className="text-lg text-foreground">
+            Please log in to view your trips.
+          </p>
+        ) : (
+          // Sử dụng Tailwind CSS cho spinner
+          <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-t-4 border-trip"></div>
+        )}
       </div>
     );
   }
@@ -174,113 +265,72 @@ export const Trips: React.FC = () => {
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="flex justify-between items-center mb-8">
-          <div>
+        {/* HEADER - Tối ưu Responsive */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8">
+          {/* Tiêu đề */}
+          <div className="mb-4 sm:mb-0">
             <h1 className="text-3xl font-bold text-foreground">My Trips</h1>
             <p className="text-muted-foreground mt-2">
               Manage your travel plans and budgets
             </p>
           </div>
 
-          {/* Thay Link bằng Button gọi Modal */}
+          {/* Nút Plan New Trip - Chiếm toàn bộ chiều rộng trên màn hình nhỏ */}
           <button
-            onClick={handleOpenModal}
-            className="flex items-center space-x-2 bg-trip hover:bg-trip/90 text-white px-4 py-2 rounded-lg transition-colors"
+            onClick={handleOpenAddModal}
+            className="w-full sm:w-auto flex items-center justify-center space-x-2 bg-trip hover:bg-trip/90 text-white px-4 py-2 rounded-lg transition-colors shadow-md shadow-trip/30"
           >
             <Plus className="w-5 h-5" />
             <span>Plan New Trip</span>
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {trips.map((trip) => (
-            <Link
-              key={trip.id}
-              // Nếu là mock trip, có thể dẫn đến một mock page, hoặc đơn giản là dùng id thật
-              href={`/trips/${trip.id}`}
-              className="bg-card rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
-            >
-              <div className="flex items-start justify-between mb-4">
-                <h3 className="text-xl font-bold text-foreground">
-                  {trip.title}
-                </h3>
-                <span
-                  className={`text-xs px-2 py-1 rounded-full ${getStatusColor(
-                    trip.status
-                  )}`}
-                >
-                  {trip.status}
-                </span>
+        {/* Danh sách chuyến đi - Tối ưu Responsive: sm:grid-cols-2 */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {trips.length > 0 ? (
+            trips.map((trip) => (
+              // Thêm kiểm tra an toàn cho ID
+              <div key={trip.id} className="relative group">
+                {trip.id && (
+                  <TripCard
+                    trip={trip}
+                    onEdit={() => handleOpenEditModal(trip)}
+                    onDelete={() => handleDeleteTrip(trip.id!)}
+                  />
+                )}
               </div>
-
-              <p className="text-muted-foreground text-sm mb-4 line-clamp-2">
-                {trip.description}
+            ))
+          ) : (
+            // No Trips Message - Tối ưu Responsive: col-span-2 trên sm, 3 trên lg, 4 trên xl
+            <div className="col-span-1 sm:col-span-2 lg:col-span-3 xl:col-span-4 text-center py-12 bg-card rounded-lg shadow-inner">
+              <MapPin className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-foreground mb-2">
+                No trips yet
+              </h3>
+              <p className="text-muted-foreground">
+                Start planning your next adventure!
               </p>
-
-              <div className="space-y-2 mb-4">
-                {trip.start_date && (
-                  <div className="flex items-center text-sm text-muted-foreground">
-                    <Calendar className="w-4 h-4 mr-2" />
-                    {new Date(trip.start_date).toLocaleDateString()} -{" "}
-                    {trip.end_date
-                      ? new Date(trip.end_date).toLocaleDateString()
-                      : "TBD"}
-                  </div>
-                )}
-                <div className="flex items-center text-sm text-muted-foreground">
-                  <DollarSign className="w-4 h-4 mr-2" />
-                  {/* Định dạng tiền tệ cho dễ đọc (ví dụ: dùng Intl.NumberFormat nếu cần) */}
-                  {trip.spent_amount.toLocaleString("vi-VN")} /{" "}
-                  {trip.total_budget.toLocaleString("vi-VN")} {trip.currency}
-                </div>
-                {trip.departure && trip.destination && (
-                  <div className="flex items-center text-sm text-muted-foreground">
-                    <MapPin className="w-4 h-4 mr-2" />
-                    {trip.departure} → {trip.destination}
-                  </div>
-                )}
-              </div>
-
-              <div className="pt-4 border-t border-border">
-                <div className="w-full bg-muted rounded-full h-2">
-                  <div
-                    className="bg-trip rounded-full h-2"
-                    style={{
-                      width: `${Math.min(
-                        (trip.spent_amount / trip.total_budget) * 100,
-                        100
-                      )}%`,
-                    }}
-                  ></div>
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  {((trip.spent_amount / trip.total_budget) * 100).toFixed(0)}%
-                  of budget used
-                </p>
-              </div>
-            </Link>
-          ))}
+            </div>
+          )}
         </div>
-
-        {trips.length === 0 && (
-          <div className="text-center py-12">
-            <MapPin className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-foreground mb-2">
-              No trips yet
-            </h3>
-            <p className="text-muted-foreground">
-              Start planning your next adventure!
-            </p>
-          </div>
-        )}
       </div>
 
-      {/* RENDER MODAL */}
+      {/* MODAL THÊM */}
       <FormNewTrip
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        onTripCreated={handleTripCreated}
+        isOpen={isAddModalOpen}
+        onClose={handleCloseAddModal}
+        onTripCreated={handleTripActionSuccess}
       />
+
+      {/* MODAL SỬA */}
+      {selectedTrip && (
+        <EditTripModal
+          isOpen={isEditModalOpen}
+          onClose={handleCloseEditModal}
+          trip={selectedTrip}
+          onTripUpdated={handleTripActionSuccess}
+        />
+      )}
     </div>
   );
 };
