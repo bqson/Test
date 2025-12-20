@@ -8,3 +8,16 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+export async function uploadFile(file: any, file_path: any) {
+  const { data, error } = await supabase.storage.from('images').upload(file_path, file)
+  if (error) {
+    throw new Error(error.message);
+  } else {
+    const { data: publicUrl } = supabase.storage
+      .from('images')
+      .getPublicUrl(data.path);
+
+    return publicUrl.publicUrl;
+  }
+}

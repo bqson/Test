@@ -34,7 +34,7 @@ export const Navbar: React.FC = () => {
     { path: "/trips", icon: Wallet, label: "Trips" },
     { path: "/destinations", icon: BookOpen, label: "Destinations" },
     { path: "/forum", icon: MessageCircle, label: "Forum" },
-    { path: "/diary", icon: BookOpen, label: "Diary" }, // Giữ lại từ phiên bản 2
+    { path: "/diaries", icon: BookOpen, label: "Diaries" }, // Giữ lại từ phiên bản 2
   ];
 
   const handleSignOut = () => {
@@ -57,13 +57,11 @@ export const Navbar: React.FC = () => {
         href={link.path}
         // Đóng menu khi nhấp vào liên kết trên mobile
         onClick={() => isMobile && setIsMenuOpen(false)}
-        className={`flex items-center space-x-1 px-3 py-2 rounded-md transition-colors duration-200 ${
-          isMobile ? "w-full text-lg justify-start" : "hover:bg-muted"
-        } ${
-          isActive(link.path)
+        className={`flex items-center space-x-1 px-3 py-2 rounded-md transition-colors duration-200 ${isMobile ? "w-full text-lg justify-start" : "hover:bg-muted"
+          } ${isActive(link.path)
             ? "bg-traveller/10 text-traveller font-semibold"
             : "text-muted-foreground"
-        } hover:bg-muted`}
+          } hover:bg-muted`}
       >
         <Icon className="w-4 h-4" />
         <span className="text-sm font-medium">{link.label}</span>
@@ -152,11 +150,10 @@ export const Navbar: React.FC = () => {
 
       {/* Mobile Menu (Sử dụng logic từ phiên bản 2) */}
       <div
-        className={`md:hidden absolute top-16 left-0 w-full bg-card shadow-lg transition-all duration-300 ease-in-out transform ${
-          isMenuOpen
+        className={`md:hidden absolute top-16 left-0 w-full bg-card shadow-lg transition-all duration-300 ease-in-out transform ${isMenuOpen
             ? "translate-y-0 opacity-100"
             : "-translate-y-4 opacity-0 pointer-events-none"
-        }`}
+          }`}
       >
         <div className="px-4 pt-2 pb-4 space-y-2">
           {navLinks.map((link) => (
