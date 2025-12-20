@@ -265,6 +265,15 @@ export const DestinationDetail: React.FC<DestinationDetailProps> = ({
               </div>
             </div>
 
+            <button
+              onClick={() =>
+                router.push(`/destinations/${destinationId}/reviews`)
+              }
+              className="mt-4 w-full border border-trip text-trip hover:bg-trip hover:text-white transition-all rounded-xl py-2 font-semibold"
+            >
+              Xem đánh giá ({destination.total_reviews || 0})
+            </button>
+
             {/* Actions */}
             <div className="bg-card p-6 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700/50">
               <h3 className="text-xl font-semibold mb-3 text-foreground">

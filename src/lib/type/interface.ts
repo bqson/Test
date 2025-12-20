@@ -82,3 +82,12 @@ export interface TripDetail {
   routes: IRoute[];
   distance: number;
 }
+
+export interface IAssessDestination {
+  traveller_id: string;
+  destination_id: string;
+  rating_star: number;
+  comment?: string;
+  created_at?: Date | string;
+  updated_at?: Date | string;
+}
