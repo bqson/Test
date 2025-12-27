@@ -11,7 +11,7 @@ interface AuthContextType {
   account: Account | null;
   profile: Profile | null;
   loading: boolean;
-  signUp: (email: string, password: string, username: string) => Promise<void>;
+  signUp: (email: string, password: string, username: string, fullName?: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -86,7 +86,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  const signUp = async (email: string, password: string, username: string) => {
+  const signUp = async (email: string, password: string, username: string, fullName?: string) => {
     setLoading(true);
 
     try {
@@ -96,17 +96,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           "Content-Type": "application/json",
         },
         credentials: "include",
-        body: JSON.stringify({ email, password, username }),
+        body: JSON.stringify({ 
+          email, 
+          password, 
+          username,
+          full_name: fullName || username // Use username as fallback if full_name not provided
+        }),
       });
 
       if (!res.ok) {
-        throw new Error("Sign up failed");
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Sign up failed");
       }
 
       await fetchUser();
     } catch (error) {
       console.error("signUp error:", error);
       setLoading(false);
+      throw error; // Re-throw to allow form to handle error
     }
   };
 

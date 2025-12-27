@@ -11,9 +11,52 @@ import {
   MapPin, // Route
   ChevronRight, // Icon cho Quick Assess item
   TrendingUp,
+  Cloud, // Weather
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
-import { WeatherMap } from "../../components/Map/WeatherMap";
+import dynamic from "next/dynamic";
+import { IRoute, ITrip } from "../../lib/type/interface";
+
+// Dynamically import RouteMap to avoid SSR issues
+const RouteMap = dynamic(
+  () =>
+    import("../../components/Map/RouteMap").then((mod) => ({
+      default: mod.RouteMap,
+    })),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        className="w-full rounded-lg overflow-hidden border border-gray-300 bg-gray-100 flex items-center justify-center"
+        style={{ height: "500px" }}
+      >
+        <p className="text-gray-500">Loading map...</p>
+      </div>
+    ),
+  }
+);
+
+// Helper function to validate coordinates
+const isValidCoordinate = (value: number): boolean => {
+  return !isNaN(value) && isFinite(value) && value !== 0;
+};
+
+const isValidLatitude = (lat: number): boolean => {
+  return isValidCoordinate(lat) && lat >= -90 && lat <= 90;
+};
+
+const isValidLongitude = (lng: number): boolean => {
+  return isValidCoordinate(lng) && lng >= -180 && lng <= 180;
+};
+
+const isValidRoute = (route: IRoute): boolean => {
+  return (
+    isValidLatitude(route.latStart) &&
+    isValidLongitude(route.lngStart) &&
+    isValidLatitude(route.latEnd) &&
+    isValidLongitude(route.lngEnd)
+  );
+};
 
 // --- START: Component cho Stat Card (Chỉ hiển thị số liệu, không redirect) ---
 interface StatCardProps {
@@ -90,7 +133,13 @@ export const Dashboard: React.FC = () => {
     totalDiaries: 0,
   });
   const [recentRoutes, setRecentRoutes] = useState<any[]>([]);
+  const [recentTrips, setRecentTrips] = useState<ITrip[]>([]);
+  const [allRoutes, setAllRoutes] = useState<IRoute[]>([]);
+  const [currentRoute, setCurrentRoute] = useState<IRoute | null>(null);
+  const [newestTripRoutes, setNewestTripRoutes] = useState<IRoute[]>([]);
+  const [newestTrip, setNewestTrip] = useState<ITrip | null>(null);
   const [loading, setLoading] = useState(true);
+  const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
   // Modal states (Giữ nguyên)
   const [showCreateRoute, setShowCreateRoute] = useState(false);
@@ -106,18 +155,216 @@ export const Dashboard: React.FC = () => {
 
   const fetchDashboardData = async () => {
     try {
-      await new Promise((resolve) => setTimeout(resolve, 800));
+      if (!API_URL || !user?.id) {
+        setLoading(false);
+        return;
+      }
 
-      setStats({
-        totalRoutes: 15,
-        totalTrips: 7,
-        totalPosts: 23,
-        totalDiaries: 11,
+      // Fetch user trips
+      let tripsData: ITrip[] = [];
+      try {
+        const tripsResponse = await fetch(`${API_URL}/users/${user.id}/trips`);
+
+        if (tripsResponse.ok) {
+          const tripsResult = await tripsResponse.json();
+          // Handle different response formats
+          if (Array.isArray(tripsResult)) {
+            tripsData = tripsResult;
+          } else if (tripsResult.data && Array.isArray(tripsResult.data)) {
+            tripsData = tripsResult.data;
+          } else if (tripsResult.data && !Array.isArray(tripsResult.data)) {
+            tripsData = [tripsResult.data];
+          }
+          setRecentTrips(tripsData.slice(0, 5)); // Get recent 5 trips
+        } else if (tripsResponse.status === 404) {
+          // User has no trips yet - this is fine
+          tripsData = [];
+          setRecentTrips([]);
+        } else {
+          console.warn(`Failed to fetch trips: ${tripsResponse.status}`);
+        }
+      } catch (err) {
+        console.error("Error fetching trips for dashboard:", err);
+        tripsData = [];
+        setRecentTrips([]);
+      }
+
+      // Fetch routes for all trips (not just first 5)
+      const routesPromises = tripsData.map(async (trip) => {
+        if (!trip.id) return [];
+        try {
+          const routesResponse = await fetch(
+            `${API_URL}/trips/${trip.id}/routes`
+          );
+          if (routesResponse.ok) {
+            const routesResult = await routesResponse.json();
+            // Handle different response formats
+            let routes: any[] = [];
+            if (Array.isArray(routesResult)) {
+              routes = routesResult;
+            } else if (routesResult.data && Array.isArray(routesResult.data)) {
+              routes = routesResult.data;
+            } else if (routesResult.data && !Array.isArray(routesResult.data)) {
+              routes = [routesResult.data];
+            }
+
+            return routes
+              .map((r: any) => {
+                // Handle both camelCase (lngStart) and snake_case (lng_start) from backend
+                const latStart = Number(r.latStart ?? r.lat_start);
+                const lngStart = Number(r.lngStart ?? r.lng_start);
+                const latEnd = Number(r.latEnd ?? r.lat_end);
+                const lngEnd = Number(r.lngEnd ?? r.lng_end);
+
+                return {
+                  id: r.id,
+                  index: Number(r.index) || 0,
+                  trip_id: r.trip_id || trip.id,
+                  title: r.title || "",
+                  description: r.description || "",
+                  lngStart: isValidLongitude(lngStart) ? lngStart : 0,
+                  latStart: isValidLatitude(latStart) ? latStart : 0,
+                  lngEnd: isValidLongitude(lngEnd) ? lngEnd : 0,
+                  latEnd: isValidLatitude(latEnd) ? latEnd : 0,
+                  details: Array.isArray(r.details) ? r.details : [],
+                  costs: [],
+                  created_at: r.created_at
+                    ? new Date(r.created_at)
+                    : new Date(),
+                  updated_at: r.updated_at
+                    ? new Date(r.updated_at)
+                    : new Date(),
+                } as IRoute;
+              })
+              .filter((route: IRoute) => isValidRoute(route)); // Filter out invalid routes
+          } else if (routesResponse.status === 404) {
+            // Trip has no routes yet - this is fine
+            return [];
+          } else {
+            console.warn(
+              `Failed to fetch routes for trip ${trip.id}: ${routesResponse.status}`
+            );
+            return [];
+          }
+        } catch (err) {
+          console.error(`Error fetching routes for trip ${trip.id}:`, err);
+          return [];
+        }
       });
 
-      setRecentRoutes([]);
+      const allRoutesArrays = await Promise.all(routesPromises);
+      const flattenedRoutes = allRoutesArrays.flat();
+      // Filter out routes with invalid coordinates
+      const validRoutes = flattenedRoutes.filter(isValidRoute);
+      setAllRoutes(validRoutes);
+
+      // Find the newest route - sort by created_at descending
+      const sortedRoutes = [...validRoutes].sort((a, b) => {
+        const dateA =
+          a.created_at instanceof Date
+            ? a.created_at.getTime()
+            : new Date(a.created_at).getTime();
+        const dateB =
+          b.created_at instanceof Date
+            ? b.created_at.getTime()
+            : new Date(b.created_at).getTime();
+        return dateB - dateA; // Descending order (newest first)
+      });
+
+      // Get the newest route
+      if (sortedRoutes.length > 0) {
+        const newestRoute = sortedRoutes[0];
+        setCurrentRoute(newestRoute);
+
+        // Find the trip for this route
+        const routeTrip = tripsData.find((t) => t.id === newestRoute.trip_id);
+        if (routeTrip) {
+          setNewestTrip(routeTrip);
+        }
+
+        // Set only the newest route
+        setNewestTripRoutes([newestRoute]);
+        setRecentRoutes([
+          {
+            id: newestRoute.id,
+            title: newestRoute.title,
+            description: newestRoute.description,
+            difficulty: routeTrip?.difficult
+              ? `${routeTrip.difficult}/5`
+              : "N/A",
+            duration_days: routeTrip
+              ? Math.ceil(
+                  (new Date(routeTrip.end_date).getTime() -
+                    new Date(routeTrip.start_date).getTime()) /
+                    (1000 * 60 * 60 * 24)
+                )
+              : 0,
+            distance_km: routeTrip?.distance || 0,
+            view_count: 0,
+            trip_id: newestRoute.trip_id,
+          },
+        ]);
+      } else {
+        setNewestTrip(null);
+        setNewestTripRoutes([]);
+        setCurrentRoute(null);
+        setRecentRoutes([]);
+      }
+
+      // Fetch posts count
+      let postsCount = 0;
+      try {
+        const postsResponse = await fetch(`${API_URL}/posts`);
+        if (postsResponse.ok) {
+          const postsResult = await postsResponse.json();
+          const posts = Array.isArray(postsResult.data)
+            ? postsResult.data
+            : Array.isArray(postsResult)
+            ? postsResult
+            : [];
+          // Filter posts by current user if possible
+          postsCount = posts.filter(
+            (p: any) => p.user_id === user.id || p.traveller_id === user.id
+          ).length;
+        }
+      } catch (err) {
+        console.error("Error fetching posts:", err);
+      }
+
+      // Fetch diaries count
+      let diariesCount = 0;
+      try {
+        const diariesResponse = await fetch(`${API_URL}/diaries`);
+        if (diariesResponse.ok) {
+          const diariesResult = await diariesResponse.json();
+          const diaries = Array.isArray(diariesResult.data)
+            ? diariesResult.data
+            : Array.isArray(diariesResult)
+            ? diariesResult
+            : [];
+          // Filter diaries by current user
+          diariesCount = diaries.filter(
+            (d: any) => d.user_id === user.id
+          ).length;
+        }
+      } catch (err) {
+        console.error("Error fetching diaries:", err);
+      }
+
+      setStats({
+        totalRoutes: flattenedRoutes.length,
+        totalTrips: tripsData.length,
+        totalPosts: postsCount,
+        totalDiaries: diariesCount,
+      });
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
+      setStats({
+        totalRoutes: 0,
+        totalTrips: 0,
+        totalPosts: 0,
+        totalDiaries: 0,
+      });
     } finally {
       setLoading(false);
     }
@@ -173,67 +420,74 @@ export const Dashboard: React.FC = () => {
 
         {/* Main Content: Routes & Quick Assess (Thay thế Quick Actions) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          {/* Current Routes Section (Bên trái) */}
+          {/* Newest Route Section (Bên trái) */}
           <div className="lg:col-span-2 bg-white rounded-xl shadow-lg p-6">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-gray-700">
-                Current Routes
-              </h2>
-              <Link
-                href="/routes"
-                className="text-blue-500 hover:text-blue-700 text-sm font-medium"
-              >
-                View all
-              </Link>
+              <div>
+                <h2 className="text-xl font-bold text-gray-700">
+                  Newest Route
+                </h2>
+                {newestTrip && currentRoute && (
+                  <p className="text-sm text-gray-500 mt-1">
+                    From trip: {newestTrip.title}
+                  </p>
+                )}
+              </div>
+              {currentRoute?.trip_id && (
+                <Link
+                  href={`/trips/${currentRoute.trip_id}`}
+                  className="text-blue-500 hover:text-blue-700 text-sm font-medium"
+                >
+                  View Trip Details
+                </Link>
+              )}
             </div>
 
-            {recentRoutes.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {recentRoutes.map((route) => (
-                  <Link
-                    key={route.id}
-                    href={`/routes/${route.id}`}
-                    className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors bg-gray-50/50"
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <h3 className="font-semibold text-gray-800 line-clamp-1">
-                        {route.title}
-                      </h3>
-                      <span
-                        className={`text-xs px-2 py-1 rounded ${
-                          route.difficulty === "Easy"
-                            ? "bg-green-100 text-green-700"
-                            : "bg-yellow-100 text-yellow-700"
-                        }`}
-                      >
-                        {route.difficulty}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-500 mb-3 line-clamp-2">
-                      {route.description}
-                    </p>
-                    <div className="flex items-center justify-between text-xs text-gray-400 mt-2">
-                      <span className="flex items-center">
-                        <NotebookPen className="w-3 h-3 mr-1" />{" "}
-                        {route.duration_days || "N/A"} days
-                      </span>
-                      <span className="flex items-center">
-                        <MapPin className="w-3 h-3 mr-1" />{" "}
-                        {route.distance_km || 0} km
-                      </span>
-                      <span className="flex items-center">
-                        <TrendingUp className="w-3 h-3 mr-1" />
-                        {route.view_count || 0} views
-                      </span>
-                    </div>
-                  </Link>
-                ))}
+            {currentRoute ? (
+              <div className="grid grid-cols-1 gap-4">
+                <Link
+                  href={
+                    currentRoute.trip_id
+                      ? `/trips/${currentRoute.trip_id}`
+                      : "#"
+                  }
+                  className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors bg-gray-50/50"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <h3 className="font-semibold text-gray-800 line-clamp-1">
+                      {currentRoute.title ||
+                        `Route ${(currentRoute.index ?? 0) + 1}`}
+                    </h3>
+                    <span className="text-xs px-2 py-1 rounded bg-indigo-100 text-indigo-700">
+                      Newest
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-500 mb-3 line-clamp-2">
+                    {currentRoute.description || "No description available"}
+                  </p>
+                  <div className="flex items-center justify-between text-xs text-gray-400 mt-2">
+                    <span className="flex items-center">
+                      <MapPin className="w-3 h-3 mr-1" />
+                      Start: {currentRoute.latStart?.toFixed(4) || "N/A"},{" "}
+                      {currentRoute.lngStart?.toFixed(4) || "N/A"}
+                    </span>
+                    <span className="flex items-center">
+                      <MapPin className="w-3 h-3 mr-1" />
+                      End: {currentRoute.latEnd?.toFixed(4) || "N/A"},{" "}
+                      {currentRoute.lngEnd?.toFixed(4) || "N/A"}
+                    </span>
+                    <span className="flex items-center">
+                      <Map className="w-3 h-3 mr-1" />
+                      Route #{(currentRoute.index ?? 0) + 1}
+                    </span>
+                  </div>
+                </Link>
               </div>
             ) : (
               <div className="text-center py-8">
                 <MapPin className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                 <p className="text-gray-500 mb-4">
-                  No popular routes found. Be the first to share one!
+                  No routes found. Create a route to get started!
                 </p>
                 <button
                   onClick={() => setShowCreateRoute(true)}
@@ -279,15 +533,34 @@ export const Dashboard: React.FC = () => {
                 bg="bg-purple-500/10"
                 link="/profile" // Chuyển hướng tới /profile theo yêu cầu
               />
+              <QuickAssessItem
+                icon={Cloud}
+                label="Check Weather"
+                color="text-cyan-500"
+                bg="bg-cyan-500/10"
+                link="/weather"
+              />
             </div>
           </div>
         </div>
 
-        {/* Weather Map Section */}
-        <div className="mb-8 bg-white rounded-xl shadow-lg p-6">
-          <h2 className="text-xl font-bold text-gray-700 mb-4">Weather Map</h2>
-          <WeatherMap />
-        </div>
+        {/* Newest Route Map Section */}
+        {currentRoute && (
+          <div className="mb-8 bg-white rounded-xl shadow-lg p-6">
+            <h2 className="text-xl font-bold text-gray-700 mb-4 flex items-center">
+              <MapPin className="mr-2 h-5 w-5 text-indigo-500" /> Newest Route
+              Map
+            </h2>
+            {currentRoute.title && (
+              <p className="text-sm text-gray-600 mb-4">{currentRoute.title}</p>
+            )}
+            <RouteMap
+              routes={[currentRoute]}
+              height="400px"
+              showAllRoutes={true}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

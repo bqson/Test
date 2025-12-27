@@ -11,8 +11,10 @@ import {
   Share2,
   Globe,
   Sun,
+  MessageSquare,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
+import CreateReviewModal from "./CreateReviewModal";
 
 // Giao diện IDestinationDetail (Giữ nguyên)
 interface IDestinationDetail {
@@ -49,11 +51,17 @@ export const DestinationDetail: React.FC<DestinationDetailProps> = ({
   );
   const [loading, setLoading] = useState(true);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [assessmentStats, setAssessmentStats] = useState<{
+    averageRating: number;
+    totalReviews: number;
+  } | null>(null);
 
-  // Fetch Destination Detail
+  // Fetch Destination Detail and Assessment Stats
   useEffect(() => {
     if (destinationId) {
       fetchDestinationDetail();
+      fetchAssessmentStats();
     }
   }, [destinationId]);
 
@@ -87,13 +95,46 @@ export const DestinationDetail: React.FC<DestinationDetailProps> = ({
       };
 
       setDestination(finalDestination);
-
-      console.log("Final Destination:", finalDestination);
     } catch (error) {
       console.error("Error fetching destination detail:", error);
       setDestination(null);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAssessmentStats = async () => {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      if (!apiUrl) return;
+
+      const response = await fetch(
+        `${apiUrl}/api/assess-destination/destination/${destinationId}`
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+        const assessments = result.data || [];
+
+        if (assessments.length > 0) {
+          const totalRating = assessments.reduce(
+            (sum: number, a: any) => sum + (a.rating_star || 0),
+            0
+          );
+          const averageRating = totalRating / assessments.length;
+          setAssessmentStats({
+            averageRating: Math.round(averageRating * 10) / 10,
+            totalReviews: assessments.length,
+          });
+        } else {
+          setAssessmentStats({
+            averageRating: 0,
+            totalReviews: 0,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching assessment stats:", error);
     }
   };
 
@@ -132,10 +173,13 @@ export const DestinationDetail: React.FC<DestinationDetailProps> = ({
   const hasImages = images.length > 0 && images[0].url;
 
   const currentRating = (
+    assessmentStats?.averageRating ||
     destination.average_rating ||
     destination.rating ||
     0
   ).toFixed(1);
+  
+  const totalReviews = assessmentStats?.totalReviews || destination.total_reviews || 0;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
@@ -252,27 +296,43 @@ export const DestinationDetail: React.FC<DestinationDetailProps> = ({
               </div>
 
               {/* Rating Box */}
-              <div className="flex items-center bg-trip/10 rounded-xl p-4 border border-trip/30">
-                <Star className="w-8 h-8 text-trip fill-trip mr-4" />
+              <div className="flex items-center bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 rounded-xl p-5 border-2 border-yellow-200 dark:border-yellow-800">
+                <div className="flex items-center justify-center w-16 h-16 bg-yellow-400 dark:bg-yellow-500 rounded-full mr-4">
+                  <Star className="w-8 h-8 text-white fill-white" />
+                </div>
                 <div>
-                  <div className="text-3xl font-bold text-trip leading-none">
+                  <div className="text-3xl font-bold text-gray-900 dark:text-white leading-none mb-1">
                     {currentRating}
                   </div>
                   <div className="text-sm text-gray-600 dark:text-gray-400">
-                    Average Rating ({destination.total_reviews || 0} reviews)
+                    {totalReviews > 0 
+                      ? `${totalReviews} ${totalReviews === 1 ? 'đánh giá' : 'đánh giá'}`
+                      : 'Chưa có đánh giá'}
                   </div>
                 </div>
               </div>
             </div>
 
-            <button
-              onClick={() =>
-                router.push(`/destinations/${destinationId}/reviews`)
-              }
-              className="mt-4 w-full border border-trip text-trip hover:bg-trip hover:text-white transition-all rounded-xl py-2 font-semibold"
-            >
-              Xem đánh giá ({destination.total_reviews || 0})
-            </button>
+            {/* Action Buttons */}
+            <div className="space-y-3">
+              {user && (
+                <button
+                  onClick={() => setShowReviewModal(true)}
+                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl py-3 font-semibold transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
+                >
+                  <MessageSquare className="w-5 h-5" />
+                  <span>Đánh giá địa điểm</span>
+                </button>
+              )}
+              <button
+                onClick={() =>
+                  router.push(`/destinations/${destinationId}/reviews`)
+                }
+                className="w-full border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all rounded-xl py-3 font-semibold"
+              >
+                Xem tất cả đánh giá ({totalReviews})
+              </button>
+            </div>
 
             {/* Actions */}
             <div className="bg-card p-6 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700/50">
@@ -373,6 +433,19 @@ export const DestinationDetail: React.FC<DestinationDetailProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Review Modal */}
+      {showReviewModal && (
+        <CreateReviewModal
+          destinationId={destinationId}
+          onClose={() => setShowReviewModal(false)}
+          onSuccess={() => {
+            setShowReviewModal(false);
+            fetchAssessmentStats();
+            fetchDestinationDetail();
+          }}
+        />
+      )}
     </div>
   );
 };

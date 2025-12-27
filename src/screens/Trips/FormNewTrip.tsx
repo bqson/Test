@@ -2,9 +2,23 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { X, Loader2, MapPin, DollarSign } from "lucide-react"; // Thêm DollarSign icon
+import { X, Loader2, MapPin, DollarSign } from "lucide-react";
 import { ITrip } from "./Trips";
 import { useAuth } from "../../contexts/AuthContext";
+import dynamic from "next/dynamic";
+
+// Dynamically import LocationPicker to avoid SSR issues
+const LocationPicker = dynamic(
+  () => import("@/components/Map/LocationPicker").then((mod) => ({ default: mod.LocationPicker })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full rounded-lg overflow-hidden border border-gray-300 bg-gray-100 flex items-center justify-center" style={{ height: '250px' }}>
+        <p className="text-gray-500 text-sm">Loading map...</p>
+      </div>
+    ),
+  }
+);
 
 // --- INTERFACE IDestination ---
 export interface IDestination {
@@ -78,6 +92,7 @@ export const FormNewTrip: React.FC<FormNewTripProps> = ({
   const [loading, setLoading] = useState(false);
   const [fetchingDestinations, setFetchingDestinations] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [departureLocation, setDepartureLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -513,6 +528,7 @@ export const FormNewTrip: React.FC<FormNewTripProps> = ({
               htmlFor="departure"
               className="block text-sm font-medium text-foreground mb-1"
             >
+              <MapPin className="w-4 h-4 mr-2 inline-block text-trip" />
               Departure Location
             </label>
             <input
@@ -523,8 +539,35 @@ export const FormNewTrip: React.FC<FormNewTripProps> = ({
               onChange={handleChange}
               disabled={isFormDisabled}
               placeholder="e.g., Ho Chi Minh City"
-              className="w-full p-3 border border-border rounded-lg bg-input text-foreground focus:ring-trip focus:border-trip transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full p-3 border border-border rounded-lg bg-input text-foreground focus:ring-trip focus:border-trip transition-colors disabled:opacity-50 disabled:cursor-not-allowed mb-2"
             />
+            <div className="mt-2">
+              <p className="text-xs text-muted-foreground mb-2">Or pick a location on the map:</p>
+              <LocationPicker
+                onLocationSelect={(lat, lng) => {
+                  setDepartureLocation({ lat, lng });
+                  // Optionally reverse geocode to get location name
+                  fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`)
+                    .then(res => res.json())
+                    .then(data => {
+                      const locationName = data.address?.city || data.address?.town || data.address?.village || 
+                                        data.address?.county || data.display_name || '';
+                      if (locationName) {
+                        setFormData(prev => ({ ...prev, departure: locationName }));
+                      }
+                    })
+                    .catch(err => console.error("Geocoding error:", err));
+                }}
+                initialLat={departureLocation?.lat}
+                initialLng={departureLocation?.lng}
+                height="250px"
+              />
+              {departureLocation && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Selected: {departureLocation.lat.toFixed(4)}, {departureLocation.lng.toFixed(4)}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Distance */}

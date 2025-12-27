@@ -19,19 +19,22 @@ export default function PostDetailPage() {
     useEffect(() => {
         if (!loading && !user) {
             router.push("/auth");
+            return;
         }
         const fetchPost = async () => {
             if (!postId || postId === "undefined") return;
             try {
-                const response = await forumService.getById(postId);
-                const data = response.data;
-                setPost(data);
+                const postData = await forumService.getById(postId);
+                setPost(postData);
             } catch (error) {
                 console.error("Lỗi khi tải bài viết:", error);
+                setPost(null);
             }
         };
 
-        fetchPost();
+        if (!loading && user) {
+            fetchPost();
+        }
     }, [user, loading, router, postId]);
 
     if (loading) {

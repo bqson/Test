@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "leaflet/dist/leaflet.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -46,7 +47,7 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  
+
   /* Entity Colors - Đồng bộ với schema.sql */
   --color-users: var(--entity-users);
   --color-account: var(--entity-account);
@@ -115,41 +116,41 @@
   /* USERS & ACCOUNT - Blue (người dùng cơ bản) */
   --entity-users: #3b82f6; /* blue-500 */
   --entity-account: #2563eb; /* blue-600 */
-  
+
   /* ADMIN - Red (quyền quản trị) */
   --entity-admin: #ef4444; /* red-500 */
-  
+
   /* SUPPORT_SOS_TEAM - Orange (hỗ trợ khẩn cấp) */
   --entity-support-sos: #f97316; /* orange-500 */
-  
+
   /* TRAVELLER - Green (người du lịch) */
   --entity-traveller: #10b981; /* emerald-500 */
-  
+
   /* REGION - Purple (khu vực) */
   --entity-region: #8b5cf6; /* purple-500 */
-  
+
   /* DESTINATION - Cyan/Teal (điểm đến) */
   --entity-destination: #06b6d4; /* cyan-500 */
-  
+
   /* TRIP - Amber/Yellow (chuyến đi) */
   --entity-trip: #f59e0b; /* amber-500 */
-  
+
   /* ROUTES - Emerald (lộ trình) */
   --entity-routes: #10b981; /* emerald-500 */
-  
+
   /* COST - Rose/Pink (chi phí) */
   --entity-cost: #f43f5e; /* rose-500 */
-  
+
   /* POST & POST_REPLY - Indigo (bài viết) */
   --entity-post: #6366f1; /* indigo-500 */
   --entity-post-reply: #818cf8; /* indigo-400 */
-  --guidelines-bg: #eff6ff;       /* blue-50 */
-  --guidelines-border: #dbeafe;   /* blue-100 */
-  --guidelines-text: #1d4ed8;     /* blue-700 */
-  
+  --guidelines-bg: #eff6ff; /* blue-50 */
+  --guidelines-border: #dbeafe; /* blue-100 */
+  --guidelines-text: #1d4ed8; /* blue-700 */
+
   /* DIARY - Violet (nhật ký) */
   --entity-diary: #a855f7; /* violet-500 */
-  
+
   /* SHARE_LOCATION - Sky (chia sẻ vị trí) */
   --entity-share-location: #0ea5e9; /* sky-500 */
 }
@@ -203,41 +204,41 @@
   /* USERS & ACCOUNT - Blue (lighter for dark mode) */
   --entity-users: #60a5fa; /* blue-400 */
   --entity-account: #3b82f6; /* blue-500 */
-  
+
   /* ADMIN - Red (lighter for dark mode) */
   --entity-admin: #f87171; /* red-400 */
-  
+
   /* SUPPORT_SOS_TEAM - Orange (lighter for dark mode) */
   --entity-support-sos: #fb923c; /* orange-400 */
-  
+
   /* TRAVELLER - Green (lighter for dark mode) */
   --entity-traveller: #34d399; /* emerald-400 */
-  
+
   /* REGION - Purple (lighter for dark mode) */
   --entity-region: #a78bfa; /* purple-400 */
-  
+
   /* DESTINATION - Cyan/Teal (lighter for dark mode) */
   --entity-destination: #22d3ee; /* cyan-400 */
-  
+
   /* TRIP - Amber/Yellow (lighter for dark mode) */
   --entity-trip: #fbbf24; /* amber-400 */
-  
+
   /* ROUTES - Emerald (lighter for dark mode) */
   --entity-routes: #34d399; /* emerald-400 */
-  
+
   /* COST - Rose/Pink (lighter for dark mode) */
   --entity-cost: #fb7185; /* rose-400 */
-  
+
   /* POST & POST_REPLY - Indigo (lighter for dark mode) */
   --entity-post: #818cf8; /* indigo-400 */
   --entity-post-reply: #a5b4fc; /* indigo-300 */
-  --guidelines-bg: #1e3a8a;       /* blue-900 */
-  --guidelines-border: #1e40af;   /* blue-800 */
-  --guidelines-text: #93c5fd;     /* blue-300 */
-  
+  --guidelines-bg: #1e3a8a; /* blue-900 */
+  --guidelines-border: #1e40af; /* blue-800 */
+  --guidelines-text: #93c5fd; /* blue-300 */
+
   /* DIARY - Violet (lighter for dark mode) */
   --entity-diary: #c084fc; /* violet-400 */
-  
+
   /* SHARE_LOCATION - Sky (lighter for dark mode) */
   --entity-share-location: #38bdf8; /* sky-400 */
 }
@@ -312,50 +313,134 @@ html {
   .snap-section {
     scroll-snap-align: start;
   }
-  
+
   /* Entity Color Utilities - Đồng bộ với schema.sql */
-  .bg-users { background-color: var(--entity-users); }
-  .bg-account { background-color: var(--entity-account); }
-  .bg-admin { background-color: var(--entity-admin); }
-  .bg-support-sos { background-color: var(--entity-support-sos); }
-  .bg-traveller { background-color: var(--entity-traveller); }
-  .bg-region { background-color: var(--entity-region); }
-  .bg-destination { background-color: var(--entity-destination); }
-  .bg-trip { background-color: var(--entity-trip); }
-  .bg-routes { background-color: var(--entity-routes); }
-  .bg-cost { background-color: var(--entity-cost); }
-  .bg-post { background-color: var(--entity-post); }
-  .bg-post-reply { background-color: var(--entity-post-reply); }
-  .bg-diary { background-color: var(--entity-diary); }
-  .bg-share-location { background-color: var(--entity-share-location); }
-  
-  .text-users { color: var(--entity-users); }
-  .text-account { color: var(--entity-account); }
-  .text-admin { color: var(--entity-admin); }
-  .text-support-sos { color: var(--entity-support-sos); }
-  .text-traveller { color: var(--entity-traveller); }
-  .text-region { color: var(--entity-region); }
-  .text-destination { color: var(--entity-destination); }
-  .text-trip { color: var(--entity-trip); }
-  .text-routes { color: var(--entity-routes); }
-  .text-cost { color: var(--entity-cost); }
-  .text-post { color: var(--entity-post); }
-  .text-post-reply { color: var(--entity-post-reply); }
-  .text-diary { color: var(--entity-diary); }
-  .text-share-location { color: var(--entity-share-location); }
-  
-  .border-users { border-color: var(--entity-users); }
-  .border-account { border-color: var(--entity-account); }
-  .border-admin { border-color: var(--entity-admin); }
-  .border-support-sos { border-color: var(--entity-support-sos); }
-  .border-traveller { border-color: var(--entity-traveller); }
-  .border-region { border-color: var(--entity-region); }
-  .border-destination { border-color: var(--entity-destination); }
-  .border-trip { border-color: var(--entity-trip); }
-  .border-routes { border-color: var(--entity-routes); }
-  .border-cost { border-color: var(--entity-cost); }
-  .border-post { border-color: var(--entity-post); }
-  .border-post-reply { border-color: var(--entity-post-reply); }
-  .border-diary { border-color: var(--entity-diary); }
-  .border-share-location { border-color: var(--entity-share-location); }
+  .bg-users {
+    background-color: var(--entity-users);
+  }
+  .bg-account {
+    background-color: var(--entity-account);
+  }
+  .bg-admin {
+    background-color: var(--entity-admin);
+  }
+  .bg-support-sos {
+    background-color: var(--entity-support-sos);
+  }
+  .bg-traveller {
+    background-color: var(--entity-traveller);
+  }
+  .bg-region {
+    background-color: var(--entity-region);
+  }
+  .bg-destination {
+    background-color: var(--entity-destination);
+  }
+  .bg-trip {
+    background-color: var(--entity-trip);
+  }
+  .bg-routes {
+    background-color: var(--entity-routes);
+  }
+  .bg-cost {
+    background-color: var(--entity-cost);
+  }
+  .bg-post {
+    background-color: var(--entity-post);
+  }
+  .bg-post-reply {
+    background-color: var(--entity-post-reply);
+  }
+  .bg-diary {
+    background-color: var(--entity-diary);
+  }
+  .bg-share-location {
+    background-color: var(--entity-share-location);
+  }
+
+  .text-users {
+    color: var(--entity-users);
+  }
+  .text-account {
+    color: var(--entity-account);
+  }
+  .text-admin {
+    color: var(--entity-admin);
+  }
+  .text-support-sos {
+    color: var(--entity-support-sos);
+  }
+  .text-traveller {
+    color: var(--entity-traveller);
+  }
+  .text-region {
+    color: var(--entity-region);
+  }
+  .text-destination {
+    color: var(--entity-destination);
+  }
+  .text-trip {
+    color: var(--entity-trip);
+  }
+  .text-routes {
+    color: var(--entity-routes);
+  }
+  .text-cost {
+    color: var(--entity-cost);
+  }
+  .text-post {
+    color: var(--entity-post);
+  }
+  .text-post-reply {
+    color: var(--entity-post-reply);
+  }
+  .text-diary {
+    color: var(--entity-diary);
+  }
+  .text-share-location {
+    color: var(--entity-share-location);
+  }
+
+  .border-users {
+    border-color: var(--entity-users);
+  }
+  .border-account {
+    border-color: var(--entity-account);
+  }
+  .border-admin {
+    border-color: var(--entity-admin);
+  }
+  .border-support-sos {
+    border-color: var(--entity-support-sos);
+  }
+  .border-traveller {
+    border-color: var(--entity-traveller);
+  }
+  .border-region {
+    border-color: var(--entity-region);
+  }
+  .border-destination {
+    border-color: var(--entity-destination);
+  }
+  .border-trip {
+    border-color: var(--entity-trip);
+  }
+  .border-routes {
+    border-color: var(--entity-routes);
+  }
+  .border-cost {
+    border-color: var(--entity-cost);
+  }
+  .border-post {
+    border-color: var(--entity-post);
+  }
+  .border-post-reply {
+    border-color: var(--entity-post-reply);
+  }
+  .border-diary {
+    border-color: var(--entity-diary);
+  }
+  .border-share-location {
+    border-color: var(--entity-share-location);
+  }
 }

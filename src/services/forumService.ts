@@ -1,45 +1,73 @@
 import { IPost, IPostReply } from "@/types/forum";
 
-const API_URL = "http://localhost:8080/posts";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 export const forumService = {
-    getAll: () => fetch(API_URL).then((res) => res.json()),
+    getAll: () => fetch(`${API_URL}/posts`).then((res) => res.json()),
 
-    getById: (id: string) =>
-        fetch(`${API_URL}/${id}`).then((res) => res.json()),
+    getById: async (id: string): Promise<IPost> => {
+        const res = await fetch(`${API_URL}/posts/${id}`);
+        if (!res.ok) {
+            throw new Error(`Failed to fetch post: ${res.status}`);
+        }
+        const data = await res.json();
+        return data.data || data;
+    },
 
     create: (post: Partial<IPost>) =>
-        fetch(API_URL, {
+        fetch(`${API_URL}/posts`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(post),
         }).then((res) => res.json()),
 
     update: (id: string, post: Partial<IPost>) =>
-        fetch(`${API_URL}/${id}`, {
+        fetch(`${API_URL}/posts/${id}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(post),
         }).then((res) => res.json()),
 
     delete: (id: string) =>
-        fetch(`${API_URL}/${id}`, {
+        fetch(`${API_URL}/posts/${id}`, {
             method: "DELETE",
         }).then((res) => res.ok),
 
-    getReplies: (postId: string): Promise<IPostReply[]> =>
-        fetch(`${API_URL}/posts/${postId}/replies`).then((res) => res.json()),
+    getReplies: async (postId: string): Promise<IPostReply[]> => {
+        try {
+            const res = await fetch(`${API_URL}/posts/${postId}/post-replies`);
+            if (res.ok) {
+                const data = await res.json();
+                return Array.isArray(data.data) ? data.data : Array.isArray(data) ? data : [];
+            }
+            console.error("Failed to fetch replies:", res.status);
+            return [];
+        } catch (error) {
+            console.error("Error fetching replies:", error);
+            return [];
+        }
+    },
 
-    createReply: (postId: string, content: string): Promise<IPostReply> =>
-        fetch(`${API_URL}/posts/${postId}/replies`, {
+    createReply: async (postId: string, content: string, userId: string): Promise<IPostReply> => {
+        const res = await fetch(`${API_URL}/post-replies`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ content }),
-        }).then((res) => res.json()),
+            body: JSON.stringify({ 
+                post_id: postId,
+                user_id: userId,
+                content 
+            }),
+        });
+        if (!res.ok) {
+            throw new Error("Failed to create reply");
+        }
+        const data = await res.json();
+        return data.data || data;
+    },
 
     toggleLike: async (id: string) => {
         const res = await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/posts/${id}/like`,
+            `${API_URL}/posts/${id}/like`,
             {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },

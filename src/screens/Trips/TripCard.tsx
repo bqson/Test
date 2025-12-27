@@ -5,12 +5,10 @@ import {
   Calendar,
   DollarSign,
   MapPin,
-  TrendingUp,
-  TrendingDown,
   Clock,
   Edit,
   Trash2,
-  Gauge, // Thêm icon cho Difficulty
+  Gauge,
 } from "lucide-react";
 import { ITrip } from "./Trips";
 
@@ -38,23 +36,19 @@ const getStatusColor = (status: ITrip["status"]) => {
 
 const formatCurrency = (amount: number, currency: string = "VND") => {
   const safeAmount = amount || 0;
+  // For VND, format without currency symbol prefix to avoid confusion
+  if (currency === "VND" || currency === "vnd") {
+    return new Intl.NumberFormat("vi-VN", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(safeAmount) + " ₫";
+  }
   return new Intl.NumberFormat("vi-VN", {
     style: "currency",
     currency: currency,
-    minimumFractionDigits: 0, // Làm gọn hơn cho số lớn
+    minimumFractionDigits: 0,
   }).format(safeAmount);
 };
-
-// Component cho một dòng chi tiết
-const DetailItem: React.FC<{
-  icon: React.ReactNode;
-  children: React.ReactNode;
-}> = ({ icon, children }) => (
-  <div className="flex items-center text-sm text-muted-foreground/90">
-    <span className="w-5 h-5 mr-3 flex-shrink-0">{icon}</span>
-    {children}
-  </div>
-);
 
 export const TripCard: React.FC<TripCardProps> = ({
   trip,
@@ -79,125 +73,132 @@ export const TripCard: React.FC<TripCardProps> = ({
   const isDifficult = difficultLevel >= 3;
 
   return (
-    // Thay đổi màu border và shadow khi hover
-    <div className="bg-card rounded-xl shadow-lg p-6 hover:shadow-2xl transition-all duration-300 border border-border hover:border-blue-500 block relative group">
-      {/* Action Buttons (Luôn hiển thị nhưng mờ, sáng lên khi hover) */}
-      <div className="absolute top-3 right-3 flex space-x-2 transition-opacity duration-300 opacity-20 group-hover:opacity-100 z-10">
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            onEdit();
-          }}
-          className="p-1.5 bg-background/80 hover:bg-blue-500 text-blue-500 hover:text-white rounded-full shadow-md transition-colors border border-border"
-          title="Edit Trip"
-        >
-          <Edit className="w-4 h-4" />
-        </button>
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            onDelete();
-          }}
-          className="p-1.5 bg-background/80 hover:bg-red-500 text-red-500 hover:text-white rounded-full shadow-md transition-colors border border-border"
-          title="Delete Trip"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+    <div className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-200 hover:border-blue-300 block relative group overflow-hidden">
+      {/* Header Section with Title and Actions */}
+      <div className="relative p-5 pb-4">
+        {/* Action Buttons - Better positioned */}
+        <div className="absolute top-4 right-4 flex space-x-1.5 z-20">
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onEdit();
+            }}
+            className="p-1.5 bg-white hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-lg transition-all duration-200 shadow-sm border border-gray-200 hover:border-blue-300"
+            title="Edit Trip"
+          >
+            <Edit className="w-4 h-4" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="p-1.5 bg-white hover:bg-red-50 text-gray-400 hover:text-red-600 rounded-lg transition-all duration-200 shadow-sm border border-gray-200 hover:border-red-300"
+            title="Delete Trip"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+
+        <Link href={`/trips/${trip.id}`} className="block">
+          {/* Title and Status */}
+          <div className="pr-20 mb-3">
+            <h3 className="text-lg font-bold text-gray-900 line-clamp-2 group-hover:text-blue-600 transition-colors leading-snug">
+              {trip.title}
+            </h3>
+          </div>
+
+          {/* Destination */}
+          <div className="flex items-center gap-2 mb-3">
+            <MapPin className="w-4 h-4 text-blue-600 flex-shrink-0" />
+            <span className="text-sm font-medium text-gray-700 truncate">
+              {destinationName}
+            </span>
+            <span
+              className={`ml-auto text-xs px-2.5 py-1 rounded-full font-semibold ${getStatusColor(
+                trip.status
+              )}`}
+            >
+              {(trip.status || "UNKNOWN").toUpperCase()}
+            </span>
+          </div>
+        </Link>
       </div>
 
+      {/* Content Section */}
       <Link href={`/trips/${trip.id}`} className="block">
-        <div className="flex items-start justify-between mb-4 pr-12">
-          {/* Tiêu đề */}
-          <h3 className="text-xl font-extrabold text-foreground line-clamp-2 hover:text-blue-500 transition-colors">
-            {trip.title}
-          </h3>
-        </div>
+        <div className="px-5 pb-5 space-y-4">
+          {/* Key Info Row - Compact */}
+          <div className="grid grid-cols-2 gap-3">
+            {/* Date */}
+            <div className="flex items-center gap-2 text-sm">
+              <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />
+              <span className="text-gray-700 truncate">
+                {startDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} - {endDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+              </span>
+            </div>
 
-        {/* Destination & Status Badge */}
-        <div className="flex items-center justify-between mb-4 pt-1">
-          <div className="flex items-center text-sm font-semibold text-trip">
-            <MapPin className="w-4 h-4 mr-2 text-blue-500" />
-            {/* Sử dụng destinationName đã kiểm tra an toàn */}
-            <span className="truncate">{destinationName}</span>
+            {/* Duration */}
+            <div className="flex items-center gap-2 text-sm">
+              <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
+              <span className="text-gray-700 font-medium">{diffDays} {diffDays === 1 ? 'day' : 'days'}</span>
+            </div>
           </div>
-          <span
-            className={`text-xs px-3 py-1 rounded-full font-bold border ${getStatusColor(
-              trip.status
-            )}`}
-          >
-            {(trip.status || "UNKNOWN").toUpperCase()}
-          </span>
-        </div>
 
-        {/* Description (Đơn giản hóa) */}
-        <p className="text-muted-foreground text-sm mb-5 line-clamp-2 italic">
-          {trip.description || "No description provided."}
-        </p>
+          {/* Budget Section - Cleaner */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-600 flex items-center gap-1.5">
+                <DollarSign className="w-4 h-4 text-green-600" />
+                Budget
+              </span>
+              <span className="text-gray-900 font-semibold">
+                {formatCurrency(trip.spent_amount, trip.currency)} / {formatCurrency(trip.total_budget, trip.currency)}
+              </span>
+            </div>
+            
+            {/* Progress Bar */}
+            <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+              <div
+                className={`h-2 rounded-full transition-all duration-500 ${
+                  percentageUsed > 100 
+                    ? "bg-red-500" 
+                    : percentageUsed > 80 
+                    ? "bg-yellow-500" 
+                    : "bg-green-500"
+                }`}
+                style={{
+                  width: `${Math.min(percentageUsed, 100)}%`,
+                }}
+              ></div>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-gray-500">Progress</span>
+              <span className="font-semibold text-gray-700">{percentageUsed.toFixed(0)}%</span>
+            </div>
+          </div>
 
-        {/* Trip Details Grid */}
-        <div className="space-y-3 mb-5 border-t border-b border-border py-4">
-          {/* Date Range */}
-          <DetailItem icon={<Calendar className="text-destination" />}>
-            {startDate.toLocaleDateString()} - {endDate.toLocaleDateString()}
-          </DetailItem>
-
-          {/* Duration */}
-          <DetailItem icon={<Clock className="text-indigo-500" />}>
-            {diffDays} days
-          </DetailItem>
-
-          {/* Budget */}
-          <DetailItem icon={<DollarSign className="text-green-500" />}>
-            <span className="font-semibold text-foreground">
-              {formatCurrency(trip.spent_amount, trip.currency)}
-            </span>
-            <span className="text-muted-foreground">
-              &nbsp;/ {formatCurrency(trip.total_budget, trip.currency)}
-            </span>
-          </DetailItem>
-
-          {/* Departure */}
-          {trip.departure && (
-            <DetailItem icon={<MapPin className="text-red-500" />}>
-              <span className="truncate">Departure: {trip.departure}</span>
-            </DetailItem>
+          {/* Additional Info - Only if needed */}
+          {(trip.departure || difficultLevel > 0) && (
+            <div className="flex items-center gap-4 pt-2 border-t border-gray-100 text-xs">
+              {trip.departure && (
+                <div className="flex items-center gap-1.5 text-gray-600">
+                  <MapPin className="w-3.5 h-3.5 text-gray-400" />
+                  <span className="truncate">{trip.departure}</span>
+                </div>
+              )}
+              {difficultLevel > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <Gauge className={`w-3.5 h-3.5 ${isDifficult ? "text-red-500" : "text-green-500"}`} />
+                  <span className={`font-medium ${isDifficult ? "text-red-600" : "text-green-600"}`}>
+                    {difficultLevel}/5
+                  </span>
+                </div>
+              )}
+            </div>
           )}
-
-          {/* Difficulty */}
-          <DetailItem
-            icon={
-              <Gauge
-                className={isDifficult ? "text-red-500" : "text-green-500"}
-              />
-            }
-          >
-            Difficulty:
-            <span
-              className={`font-semibold ml-1 ${
-                isDifficult ? "text-red-500" : "text-green-500"
-              }`}
-            >
-              {difficultLevel} / 5
-            </span>
-          </DetailItem>
-        </div>
-
-        {/* Budget Progress Bar */}
-        <div className="pt-2">
-          <div className="w-full bg-muted rounded-full h-2">
-            <div
-              className="bg-blue-500 rounded-full h-2 transition-all duration-700"
-              style={{
-                width: `${percentageUsed}%`,
-              }}
-            ></div>
-          </div>
-          <p className="text-xs text-muted-foreground mt-2 font-medium">
-            <span className="font-bold text-foreground">
-              {percentageUsed.toFixed(0)}%
-            </span>{" "}
-            of budget used
-          </p>
         </div>
       </Link>
     </div>

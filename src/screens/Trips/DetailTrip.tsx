@@ -17,7 +17,21 @@ import {
 import { useRouter } from "next/navigation";
 import { AddRouteForm } from "./AddRouteForm";
 import { RouteCard } from "@/components/Route/RouteCard";
+import dynamic from "next/dynamic";
 import { ICost, IRoute, ITrip, IDestination } from "@/lib/type/interface";
+
+// Dynamically import RouteMap to avoid SSR issues
+const RouteMap = dynamic(
+  () => import("@/components/Map/RouteMap").then((mod) => ({ default: mod.RouteMap })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full rounded-lg overflow-hidden border border-gray-300 bg-gray-100 flex items-center justify-center" style={{ height: '500px' }}>
+        <p className="text-gray-500">Loading map...</p>
+      </div>
+    ),
+  }
+);
 
 // --- TYPE EXTENSIONS ---
 interface TripWithDetails extends ITrip {
@@ -82,17 +96,36 @@ const normalizeCost = (
   };
 };
 
+// Helper functions to validate coordinates
+const isValidCoordinate = (value: number): boolean => {
+  return !isNaN(value) && isFinite(value) && value !== 0;
+};
+
+const isValidLatitude = (lat: number): boolean => {
+  return isValidCoordinate(lat) && lat >= -90 && lat <= 90;
+};
+
+const isValidLongitude = (lng: number): boolean => {
+  return isValidCoordinate(lng) && lng >= -180 && lng <= 180;
+};
+
 const normalizeRoute = (apiRoute: any): IRoute => {
+  // Handle both camelCase (lngStart) and snake_case (lng_start) from backend
+  const lngStart = Number(apiRoute.lngStart ?? apiRoute.lng_start);
+  const latStart = Number(apiRoute.latStart ?? apiRoute.lat_start);
+  const lngEnd = Number(apiRoute.lngEnd ?? apiRoute.lng_end);
+  const latEnd = Number(apiRoute.latEnd ?? apiRoute.lat_end);
+  
   return {
     id: apiRoute.id,
     index: Number(apiRoute.index) || 0,
     trip_id: apiRoute.trip_id,
     title: apiRoute.title || "",
     description: apiRoute.description || "",
-    lngStart: Number(apiRoute.lngStart) || 0,
-    latStart: Number(apiRoute.latStart) || 0,
-    lngEnd: Number(apiRoute.lngEnd) || 0,
-    latEnd: Number(apiRoute.latEnd) || 0,
+    lngStart: isValidLongitude(lngStart) ? lngStart : 0,
+    latStart: isValidLatitude(latStart) ? latStart : 0,
+    lngEnd: isValidLongitude(lngEnd) ? lngEnd : 0,
+    latEnd: isValidLatitude(latEnd) ? latEnd : 0,
     details: Array.isArray(apiRoute.details) ? apiRoute.details : [],
     costs: [], // Will be populated separately
     created_at: apiRoute.created_at,
@@ -195,11 +228,21 @@ export const DetailTrip: React.FC<DetailTripProps> = ({ params }) => {
 
         const routesWithCosts = await Promise.all(routesWithCostsPromises);
 
+        // Filter out routes with invalid coordinates
+        const validRoutes = routesWithCosts.filter((route) => {
+          return (
+            isValidLatitude(route.latStart) &&
+            isValidLongitude(route.lngStart) &&
+            isValidLatitude(route.latEnd) &&
+            isValidLongitude(route.lngEnd)
+          );
+        });
+
         // Sort routes by index
-        routesWithCosts.sort((a, b) => (a.index || 0) - (b.index || 0));
+        validRoutes.sort((a, b) => (a.index || 0) - (b.index || 0));
 
         // Calculate spent amount
-        const spentAmount = calculateSpentAmount(routesWithCosts);
+        const spentAmount = calculateSpentAmount(validRoutes);
 
         const finalTrip: TripWithDetails = {
           ...rawTrip,
@@ -220,7 +263,7 @@ export const DetailTrip: React.FC<DetailTripProps> = ({ params }) => {
           created_at: rawTrip.created_at,
           updated_at: rawTrip.updated_at,
           destination: rawTrip.destination,
-          routes: routesWithCosts,
+          routes: validRoutes,
         };
 
         setTrip(finalTrip);
@@ -372,21 +415,26 @@ export const DetailTrip: React.FC<DetailTripProps> = ({ params }) => {
 
   if (loading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-background">
-        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      <div className="flex h-screen w-full items-center justify-center bg-gradient-to-br from-gray-50 via-white to-gray-50">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600 font-medium">Loading trip details...</p>
+        </div>
       </div>
     );
   }
 
   if (error || !trip) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-background p-4 text-center">
-        <AlertCircle className="h-12 w-12 text-red-500" />
-        <h2 className="text-2xl font-bold">Error Loading Trip</h2>
-        <p className="text-muted-foreground">{error || "Trip not found"}</p>
+      <div className="flex h-screen flex-col items-center justify-center gap-6 bg-gradient-to-br from-gray-50 via-white to-gray-50 p-4 text-center">
+        <div className="p-4 bg-red-100 rounded-full">
+          <AlertCircle className="h-16 w-16 text-red-600" />
+        </div>
+        <h2 className="text-3xl font-bold text-gray-900">Error Loading Trip</h2>
+        <p className="text-gray-600 max-w-md">{error || "Trip not found"}</p>
         <button
           onClick={() => router.push("/trips")}
-          className="rounded-lg bg-primary px-4 py-2 text-white hover:bg-primary/90"
+          className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 px-6 py-3 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
         >
           Back to Trips
         </button>
@@ -401,180 +449,227 @@ export const DetailTrip: React.FC<DetailTripProps> = ({ params }) => {
   const destinationName = trip.destination?.name || "Unknown Destination";
 
   return (
-    <div className="min-h-screen bg-gray-50/50 pb-20 relative">
-      {/* Modal Add Route */}
-      {isAddingRoute && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-xl bg-white shadow-2xl">
-            <AddRouteForm
-              onClose={() => setIsAddingRoute(false)}
-              onSubmit={handleAddNewRoute}
-              currentMaxIndex={
-                trip.routes.length > 0
-                  ? Math.max(...trip.routes.map((r) => r.index || 0))
-                  : 0
-              }
-            />
-          </div>
-        </div>
-      )}
-
-      <div className="mx-auto max-w-7xl px-4 py-8">
-        {/* Navigation */}
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 pb-20 relative">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        {/* Navigation - Enhanced */}
         <button
           onClick={() => router.push("/trips")}
-          className="mb-6 flex items-center text-sm font-medium text-gray-500 hover:text-gray-900"
+          className="mb-6 flex items-center text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors group"
         >
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back to List
+          <ArrowLeft className="mr-2 h-4 w-4 group-hover:-translate-x-1 transition-transform" /> 
+          Back to Trips
         </button>
 
-        {/* Header */}
-        <div className="mb-8 flex flex-col justify-between gap-4 border-b pb-6 md:flex-row md:items-center">
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">
-              {trip.title}
-            </h1>
-            <div className="mt-2 flex flex-wrap items-center gap-3">
-              <span
-                className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${getStatusColor(
-                  trip.status
-                )}`}
-              >
-                {trip.status}
-              </span>
-              <span className="flex items-center text-sm text-gray-500">
-                <Calendar className="mr-1.5 h-4 w-4" />
-                {new Date(trip.start_date).toLocaleDateString("vi-VN")} -{" "}
-                {new Date(trip.end_date).toLocaleDateString("vi-VN")}
-              </span>
+        {/* Header - Enhanced with better styling */}
+        <div className="mb-8 bg-white rounded-2xl shadow-lg border border-gray-200 p-6 sm:p-8">
+          <div className="flex flex-col justify-between gap-6 md:flex-row md:items-start">
+            <div className="flex-1">
+              <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-gray-900 mb-4">
+                {trip.title}
+              </h1>
+              <div className="flex flex-wrap items-center gap-3 mb-4">
+                <span
+                  className={`rounded-full border-2 px-3 py-1 text-xs font-bold shadow-sm ${getStatusColor(
+                    trip.status
+                  )}`}
+                >
+                  {trip.status.toUpperCase()}
+                </span>
+                <span className="flex items-center text-sm text-gray-600 bg-gray-50 px-3 py-1 rounded-lg">
+                  <Calendar className="mr-1.5 h-4 w-4 text-blue-600" />
+                  {new Date(trip.start_date).toLocaleDateString("en-US", { month: "long", day: "numeric" })} -{" "}
+                  {new Date(trip.end_date).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                </span>
+              </div>
+              {trip.description && (
+                <p className="text-gray-600 text-base leading-relaxed max-w-2xl">
+                  {trip.description}
+                </p>
+              )}
             </div>
-          </div>
-          <div className="text-right">
-            <p className="text-sm text-gray-500">Destination</p>
-            <p className="text-lg font-medium text-gray-900">
-              {destinationName}
-            </p>
+            <div className="text-left md:text-right bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Destination</p>
+              <div className="flex items-center md:justify-end gap-2">
+                <MapPin className="h-5 w-5 text-blue-600" />
+                <p className="text-lg font-bold text-gray-900">
+                  {destinationName}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-          {/* LEFT: Info & Budget */}
+        {/* Modal Add Route */}
+        {isAddingRoute && (
+          <div 
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            onClick={(e) => {
+              // Close when clicking on the backdrop (not on the form itself)
+              if (e.target === e.currentTarget) {
+                setIsAddingRoute(false);
+              }
+            }}
+          >
+            <div 
+              className="w-full max-w-2xl rounded-xl bg-white shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <AddRouteForm
+                onClose={() => setIsAddingRoute(false)}
+                onSubmit={handleAddNewRoute}
+                currentMaxIndex={
+                  trip.routes.length > 0
+                    ? Math.max(...trip.routes.map((r) => r.index || 0))
+                    : 0
+                }
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-6 lg:gap-8 lg:grid-cols-3">
+          {/* LEFT: Info & Budget - Enhanced */}
           <div className="space-y-6 lg:col-span-1">
-            {/* Info Card */}
-            <div className="rounded-xl border bg-white p-6 shadow-sm">
-              <h3 className="mb-4 flex items-center text-lg font-bold text-gray-900">
-                <Activity className="mr-2 h-5 w-5 text-blue-500" /> General Info
+            {/* Info Card - Enhanced */}
+            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-lg">
+              <h3 className="mb-5 flex items-center text-xl font-bold text-gray-900">
+                <div className="p-2 bg-blue-100 rounded-lg mr-3">
+                  <Activity className="h-5 w-5 text-blue-600" />
+                </div>
+                General Info
               </h3>
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between py-1 border-b border-gray-100">
-                  <span className="text-gray-500">Members</span>
-                  <span className="font-medium flex items-center">
-                    <Users className="w-3 h-3 mr-1" /> {trip.members}
+              <div className="space-y-4">
+                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                  <span className="text-gray-600 flex items-center">
+                    <Users className="w-4 h-4 mr-2 text-gray-400" />
+                    Members
+                  </span>
+                  <span className="font-bold text-gray-900">
+                    {trip.members}
                   </span>
                 </div>
-                <div className="flex justify-between py-1 border-b border-gray-100">
-                  <span className="text-gray-500">Distance</span>
-                  <span className="font-medium">{trip.distance} km</span>
+                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                  <span className="text-gray-600">Distance</span>
+                  <span className="font-bold text-gray-900">{trip.distance} km</span>
                 </div>
-                <div className="flex justify-between py-1 border-b border-gray-100">
-                  <span className="text-gray-500">Difficulty</span>
-                  <span className="font-medium text-orange-600">
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-gray-600">Difficulty</span>
+                  <span className={`font-bold px-3 py-1 rounded-lg ${
+                    trip.difficult >= 4 
+                      ? "bg-red-100 text-red-700" 
+                      : trip.difficult >= 3 
+                      ? "bg-orange-100 text-orange-700" 
+                      : "bg-green-100 text-green-700"
+                  }`}>
                     {trip.difficult}/5
                   </span>
-                </div>
-                <div className="pt-2">
-                  <p className="text-gray-600 italic">{trip.description}</p>
                 </div>
               </div>
             </div>
 
-            {/* Budget Card */}
-            <div className="rounded-xl border bg-white p-6 shadow-sm">
-              <h3 className="mb-4 flex items-center text-lg font-bold text-gray-900">
-                <DollarSign className="mr-2 h-5 w-5 text-green-600" /> Budget
+            {/* Budget Card - Enhanced */}
+            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-lg">
+              <h3 className="mb-5 flex items-center text-xl font-bold text-gray-900">
+                <div className="p-2 bg-green-100 rounded-lg mr-3">
+                  <DollarSign className="h-5 w-5 text-green-600" />
+                </div>
+                Budget
               </h3>
 
-              <div className="mb-4">
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-gray-500">Progress</span>
-                  <span className="font-medium">{budgetUsage.toFixed(0)}%</span>
+              <div className="mb-6">
+                <div className="flex justify-between items-center text-sm mb-2">
+                  <span className="text-gray-600 font-medium">Progress</span>
+                  <span className="font-bold text-gray-900">{budgetUsage.toFixed(0)}%</span>
                 </div>
-                <div className="h-2.5 w-full rounded-full bg-gray-100">
+                <div className="h-3 w-full rounded-full bg-gray-200 overflow-hidden">
                   <div
-                    className={`h-2.5 rounded-full transition-all ${
-                      remaining < 0 ? "bg-red-500" : "bg-green-500"
+                    className={`h-3 rounded-full transition-all duration-500 ${
+                      remaining < 0 
+                        ? "bg-gradient-to-r from-red-500 to-red-600" 
+                        : budgetUsage > 80 
+                        ? "bg-gradient-to-r from-yellow-500 to-orange-500" 
+                        : "bg-gradient-to-r from-green-500 to-emerald-500"
                     }`}
                     style={{ width: `${Math.min(budgetUsage, 100)}%` }}
                   ></div>
                 </div>
               </div>
 
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Total Budget:</span>
-                  <span className="font-medium">
+              <div className="space-y-3">
+                <div className="flex justify-between items-center py-2 bg-gray-50 rounded-lg px-3">
+                  <span className="text-gray-600 text-sm">Total Budget</span>
+                  <span className="font-bold text-gray-900">
                     {formatCurrency(trip.total_budget)}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Spent:</span>
-                  <span className="font-medium text-red-600">
+                <div className="flex justify-between items-center py-2 bg-gray-50 rounded-lg px-3">
+                  <span className="text-gray-600 text-sm">Spent</span>
+                  <span className="font-bold text-red-600">
                     {formatCurrency(trip.spent_amount)}
                   </span>
                 </div>
                 <div
-                  className={`mt-2 flex justify-between rounded-lg p-2 font-bold ${
+                  className={`mt-3 flex justify-between items-center rounded-xl p-4 font-bold ${
                     remaining < 0
-                      ? "bg-red-50 text-red-700"
-                      : "bg-green-50 text-green-700"
+                      ? "bg-gradient-to-r from-red-50 to-red-100 text-red-700 border-2 border-red-200"
+                      : "bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border-2 border-green-200"
                   }`}
                 >
-                  <span>Remaining:</span>
-                  <span>{formatCurrency(remaining)}</span>
+                  <span>Remaining</span>
+                  <span className="text-lg">{formatCurrency(remaining)}</span>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* RIGHT: Routes List */}
+          {/* RIGHT: Routes List - Enhanced */}
           <div className="lg:col-span-2">
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="flex items-center text-2xl font-bold text-gray-900">
-                <MapPin className="mr-2 h-6 w-6 text-indigo-500" /> Itinerary
+            <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <h2 className="flex items-center text-2xl sm:text-3xl font-bold text-gray-900">
+                <div className="p-2 bg-indigo-100 rounded-lg mr-3">
+                  <MapPin className="h-6 w-6 text-indigo-600" />
+                </div>
+                Itinerary
               </h2>
               <button
                 onClick={() => setIsAddingRoute(true)}
-                className="flex items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-medium text-white transition-transform hover:scale-105 hover:bg-gray-800"
+                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 px-5 py-2.5 text-sm font-semibold text-white transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
               >
-                <PlusCircle className="h-4 w-4" /> Add Stop
+                <PlusCircle className="h-5 w-5" /> Add Stop
               </button>
             </div>
 
             <div className="space-y-4">
               {trip.routes.length > 0 ? (
-                trip.routes.map((route) => (
-                  <RouteCard
-                    key={route.id}
-                    route={route}
-                    onAddCost={handleAddCost}
-                    onDeleteCost={handleDeleteCost}
-                  />
+                trip.routes.map((route, index) => (
+                  <div key={route.id} className="relative">
+                    {/* Route number indicator */}
+                    <div className="absolute -left-3 top-6 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-blue-600 text-white font-bold text-sm shadow-lg border-2 border-white">
+                      {index + 1}
+                    </div>
+                    <RouteCard
+                      route={route}
+                      onAddCost={handleAddCost}
+                      onDeleteCost={handleDeleteCost}
+                    />
+                  </div>
                 ))
               ) : (
-                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 bg-white py-12 text-center">
-                  <div className="mb-3 rounded-full bg-gray-50 p-3">
-                    <MapPin className="h-8 w-8 text-gray-400" />
+                <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-300 bg-white py-16 text-center">
+                  <div className="mb-4 rounded-full bg-gradient-to-br from-indigo-100 to-blue-100 p-4">
+                    <MapPin className="h-10 w-10 text-indigo-600" />
                   </div>
-                  <h3 className="text-lg font-medium text-gray-900">
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">
                     No routes yet
                   </h3>
-                  <p className="mt-1 text-sm text-gray-500">
-                    Start planning your trip by adding the first location.
+                  <p className="mt-1 text-sm text-gray-600 max-w-md">
+                    Start planning your trip by adding the first location to your itinerary.
                   </p>
                   <button
                     onClick={() => setIsAddingRoute(true)}
-                    className="mt-4 text-sm font-medium text-indigo-600 hover:text-indigo-500 hover:underline"
+                    className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 px-5 py-2.5 text-sm font-semibold text-white transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
                   >
+                    <PlusCircle className="h-5 w-5" />
                     Add first route
                   </button>
                 </div>
@@ -582,6 +677,21 @@ export const DetailTrip: React.FC<DetailTripProps> = ({ params }) => {
             </div>
           </div>
         </div>
+
+        {/* Trip Route Map - Enhanced */}
+        {trip.routes.length > 0 && (
+          <div className={`mt-8 bg-white rounded-2xl border border-gray-200 p-6 shadow-lg transition-opacity ${isAddingRoute ? 'opacity-50' : 'opacity-100'}`}>
+            <h2 className="text-2xl font-bold text-gray-900 mb-5 flex items-center">
+              <div className="p-2 bg-indigo-100 rounded-lg mr-3">
+                <MapPin className="h-6 w-6 text-indigo-600" />
+              </div>
+              Trip Route Map
+            </h2>
+            <div className="rounded-xl overflow-hidden border border-gray-200">
+              <RouteMap routes={trip.routes} height="500px" showAllRoutes={true} />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

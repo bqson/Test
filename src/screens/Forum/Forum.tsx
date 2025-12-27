@@ -1,10 +1,10 @@
 "use client";
 
 import { IPost } from "@/types/forum";
-import { Clock, Eye, MessageCircle, Plus } from "lucide-react";
+import { Clock, Eye, MessageCircle, Plus, TrendingUp, Filter, User } from "lucide-react";
 import Link from "next/link";
 import React, { useEffect, useState } from "react";
-import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../contexts/AuthContext";
 
 export interface ICategory {
     id: string;
@@ -26,30 +26,35 @@ const getCategoryColor = (category: string) => {
 };
 
 export const Forum: React.FC = () => {
+    const { user } = useAuth();
     const [posts, setPosts] = useState<IPost[]>([]);
     const [loading, setLoading] = useState(true);
     const [categories, setCategories] = useState<ICategory[]>([]);
     const [selectedCategory, setSelectedCategory] = useState<string | null>(
         null
     );
+    const [showMyPosts, setShowMyPosts] = useState(false);
+    const [sortBy, setSortBy] = useState<"recent" | "popular" | "trending">("recent");
+    const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
     useEffect(() => {
-        fetchForumData();
-    }, []);
+        if (API_URL) {
+            fetchForumData();
+        }
+    }, [API_URL]);
 
     const fetchForumData = async () => {
+        if (!API_URL) return;
+        
         try {
             setLoading(true);
 
-            const res = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL}/posts`,
-                {
-                    method: "GET",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                }
-            );
+            const res = await fetch(`${API_URL}/posts`, {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+            });
 
             if (!res.ok) {
                 throw new Error("Failed to fetch forum data");
@@ -60,49 +65,62 @@ export const Forum: React.FC = () => {
                 ? rawData
                 : rawData.data || [];
 
+            // Fetch user info for posts
             const postUserIds = [
-                ...new Set(rawPosts.map((p: any) => p.id_user)),
+                ...new Set(rawPosts.map((p: any) => p.user_id || p.id_user).filter(Boolean)),
             ];
 
             const userInfoMap: Record<string, any> = {};
 
+            // Fetch user details for each post author
             if (postUserIds.length > 0) {
-                const { data: travellers } = await supabase
-                    .from("traveller")
-                    .select("id_user")
-                    .in("id_user", postUserIds);
+                const userPromises = postUserIds.map(async (userId: string) => {
+                    if (!userId) return null;
+                    try {
+                        const userRes = await fetch(`${API_URL}/users/${userId}`);
+                        if (userRes.ok) {
+                            const userData = await userRes.json();
+                            const userInfo = userData.data || userData;
+                            return { userId, userData: userInfo };
+                        }
+                        return null;
+                    } catch (err) {
+                        console.error(`Error fetching user ${userId}:`, err);
+                        return null;
+                    }
+                });
 
-                const travellerIds = travellers?.map((t) => t.id_user) || [];
-
-                if (travellerIds.length > 0) {
-                    const { data: users } = await supabase
-                        .from("users")
-                        .select("id_user, name, avatar_url")
-                        .in("id_user", travellerIds);
-
-                    users?.forEach((u: any) => {
-                        userInfoMap[u.id_user] = u;
-                    });
-                }
+                const userResults = await Promise.all(userPromises);
+                userResults.forEach((result) => {
+                    if (result) {
+                        userInfoMap[result.userId] = result.userData;
+                    }
+                });
             }
 
             const transformedPosts: IPost[] = rawPosts.map((post: any) => {
-                const userInfo = userInfoMap[post.id_user] || {};
-                const categoryName = post.tags || "General";
+                const userId = post.user_id || post.id_user;
+                const userInfo = userInfoMap[userId] || {};
+                const categoryName = post.tags?.split(",")[0]?.trim() || "General";
                 return {
                     ...post,
                     id: post.id || post.uuid,
+                    user_id: userId,
                     last_activity_at: post.updated_at || post.created_at,
                     reply_count: post.reply_count || 0,
-                    view_count: post.total_views || 0,
-                    is_pinned: false,
+                    total_views: post.total_views || 0,
+                    total_likes: post.total_likes || 0,
+                    is_pinned: post.is_pinned || false,
                     forum_categories: {
                         name: categoryName,
                         color: getCategoryColor(categoryName),
                     },
                     profiles: {
-                        username: userInfo.name || "User",
+                        id: userInfo.id || userId,
+                        full_name: userInfo.full_name || "User",
                         avatar_url: userInfo.avatar_url || null,
+                        account_id: userInfo.account_id,
+                        phone: userInfo.phone,
                     },
                 };
             });
@@ -146,33 +164,63 @@ export const Forum: React.FC = () => {
 
     if (loading) {
         return (
-            <div className="flex justify-center items-center h-screen">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-post"></div>
+            <div className="flex justify-center items-center h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-16 w-16 border-4 border-gray-200 border-t-blue-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600 font-medium">Loading forum...</p>
+                </div>
             </div>
         );
     }
 
-    const filteredPosts = selectedCategory
-        ? posts.filter(
-              (post) => post.forum_categories?.name === selectedCategory
-          )
-        : posts;
+    // Filter posts based on category and "Your Posts" filter
+    let filteredPosts = posts;
+    
+    // Apply category filter
+    if (selectedCategory) {
+        filteredPosts = filteredPosts.filter(
+            (post) => post.forum_categories?.name === selectedCategory
+        );
+    }
+    
+    // Apply "Your Posts" filter
+    if (showMyPosts && user) {
+        filteredPosts = filteredPosts.filter(
+            (post) => post.user_id === user.id || String(post.user_id) === String(user.id)
+        );
+    }
+    
+    // Sort posts
+    filteredPosts = [...filteredPosts].sort((a, b) => {
+        switch (sortBy) {
+            case "popular":
+                return (b.total_likes || 0) - (a.total_likes || 0);
+            case "trending":
+                const aScore = (b.total_likes || 0) * 2 + (b.reply_count || 0);
+                const bScore = (a.total_likes || 0) * 2 + (a.reply_count || 0);
+                return aScore - bScore;
+            case "recent":
+            default:
+                return new Date(b.last_activity_at || b.created_at).getTime() - 
+                       new Date(a.last_activity_at || a.created_at).getTime();
+        }
+    });
 
     return (
-        <div className="min-h-screen bg-background">
-            <div className="max-w-7xl mx-auto px-4 py-8">
-                <div className="flex justify-between items-center mb-8">
+        <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
                     <div>
-                        <h1 className="text-3xl font-bold text-foreground">
+                        <h1 className="text-4xl sm:text-5xl font-extrabold text-gray-900 mb-2">
                             Community Forum
                         </h1>
-                        <p className="text-muted-foreground mt-2">
+                        <p className="text-gray-600 text-lg">
                             Share experiences and ask questions
                         </p>
                     </div>
                     <Link
                         href="/forum/new"
-                        className="flex items-center space-x-2 bg-post hover:bg-post/90 text-white px-4 py-2 rounded-lg transition-colors"
+                        className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-3 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 font-semibold"
                     >
                         <Plus className="w-5 h-5" />
                         <span>New Post</span>
@@ -182,9 +230,17 @@ export const Forum: React.FC = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                     <div className="lg:col-span-3 space-y-4">
                         {filteredPosts.length === 0 ? (
-                            <div className="bg-card rounded-lg p-12 text-center border-2 border-dashed">
-                                <p className="text-muted-foreground">
-                                    No posts found in this category.
+                            <div className="bg-white rounded-2xl shadow-lg p-16 text-center border-2 border-dashed border-gray-300">
+                                <MessageCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                                <h3 className="text-xl font-bold text-gray-900 mb-2">
+                                    No posts found
+                                </h3>
+                                <p className="text-gray-600">
+                                    {showMyPosts
+                                        ? "You haven't created any posts yet."
+                                        : selectedCategory 
+                                        ? `No posts in "${selectedCategory}" category yet.`
+                                        : "No posts yet. Be the first to share!"}
                                 </p>
                             </div>
                         ) : (
@@ -192,64 +248,75 @@ export const Forum: React.FC = () => {
                                 <Link
                                     key={post.id}
                                     href={`/forum/${post.id}`}
-                                    className="bg-card rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow block"
+                                    className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 border border-gray-200 hover:border-blue-300 hover:-translate-y-1 block group"
                                 >
-                                    <div className="flex items-start space-x-4">
-                                        <div className="w-10 h-10 bg-traveller/20 rounded-full flex items-center justify-center flex-shrink-0">
-                                            <span className="text-sm font-bold text-traveller">
-                                                {post.profiles?.full_name
-                                                    ?.charAt(0)
-                                                    .toUpperCase()}
-                                            </span>
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center space-x-2 mb-2">
-                                                <span
-                                                    className="text-xs px-2 py-1 rounded"
-                                                    style={{
-                                                        backgroundColor: `${post.forum_categories?.color}20`,
-                                                        color: post
-                                                            .forum_categories
-                                                            ?.color,
-                                                    }}
-                                                >
-                                                    {
-                                                        post.forum_categories
-                                                            ?.name
-                                                    }
-                                                </span>
-                                                {post.is_pinned && (
-                                                    <span className="text-xs bg-trip/20 text-trip px-2 py-1 rounded">
-                                                        Pinned
+                                    <div className="p-6">
+                                        <div className="flex items-start gap-4">
+                                            {/* Avatar */}
+                                            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center flex-shrink-0 shadow-lg">
+                                                {post.profiles?.avatar_url ? (
+                                                    <img
+                                                        src={post.profiles.avatar_url}
+                                                        alt={post.profiles.full_name || "User"}
+                                                        className="w-full h-full rounded-full object-cover"
+                                                    />
+                                                ) : (
+                                                    <span className="text-lg font-bold text-white">
+                                                        {post.profiles?.full_name
+                                                            ?.charAt(0)
+                                                            .toUpperCase() || "U"}
                                                     </span>
                                                 )}
                                             </div>
-                                            <h3 className="text-lg font-semibold text-foreground mb-2">
-                                                {post.title}
-                                            </h3>
-                                            <p className="text-muted-foreground text-sm mb-3 line-clamp-2">
-                                                {post.content}
-                                            </p>
-                                            <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                                                <span className="flex items-center">
-                                                    <MessageCircle className="w-4 h-4 mr-1" />
-                                                    {post.reply_count}
-                                                </span>
-                                                <span className="flex items-center">
-                                                    <Eye className="w-4 h-4 mr-1" />
-                                                    {post.total_views}
-                                                </span>
-                                                <span className="flex items-center">
-                                                    <Clock className="w-4 h-4 mr-1" />
-                                                    {formatTimeAgo(
-                                                        post.last_activity_at
+                                            
+                                            <div className="flex-1 min-w-0">
+                                                {/* Category and Pinned Badge */}
+                                                <div className="flex items-center gap-2 mb-3">
+                                                    <span
+                                                        className="text-xs px-3 py-1 rounded-full font-semibold border-2"
+                                                        style={{
+                                                            backgroundColor: `${post.forum_categories?.color}15`,
+                                                            borderColor: post.forum_categories?.color,
+                                                            color: post.forum_categories?.color,
+                                                        }}
+                                                    >
+                                                        {post.forum_categories?.name || "General"}
+                                                    </span>
+                                                    {post.is_pinned && (
+                                                        <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full font-semibold border border-yellow-300">
+                                                            📌 Pinned
+                                                        </span>
                                                     )}
-                                                </span>
-                                                <span>
-                                                    by{" "}
-                                                    {post.profiles?.full_name ||
-                                                        "User"}
-                                                </span>
+                                                </div>
+                                                
+                                                {/* Title */}
+                                                <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors line-clamp-2">
+                                                    {post.title}
+                                                </h3>
+                                                
+                                                {/* Content Preview */}
+                                                <p className="text-gray-600 text-sm mb-4 line-clamp-2 leading-relaxed">
+                                                    {post.content}
+                                                </p>
+                                                
+                                                {/* Meta Info */}
+                                                <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
+                                                    <span className="flex items-center gap-1.5">
+                                                        <MessageCircle className="w-4 h-4 text-blue-500" />
+                                                        <span className="font-medium">{post.reply_count || 0}</span>
+                                                    </span>
+                                                    <span className="flex items-center gap-1.5">
+                                                        <Eye className="w-4 h-4 text-gray-400" />
+                                                        <span>{post.total_views || 0}</span>
+                                                    </span>
+                                                    <span className="flex items-center gap-1.5">
+                                                        <Clock className="w-4 h-4 text-gray-400" />
+                                                        <span>{formatTimeAgo(post.last_activity_at)}</span>
+                                                    </span>
+                                                    <span className="text-gray-600 font-medium">
+                                                        {post.profiles?.full_name || "User"}
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -258,73 +325,156 @@ export const Forum: React.FC = () => {
                         )}
                     </div>
 
-                    <div className="space-y-4">
-                        <div className="bg-card rounded-lg shadow-md p-6">
-                            <h3 className="font-bold text-foreground mb-4">
+                    <div className="space-y-6">
+                        {/* Filters */}
+                        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+                            <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                                <Filter className="w-5 h-5 mr-2 text-blue-600" />
+                                Filters
+                            </h3>
+                            
+                            {/* Your Posts Filter */}
+                            {user && (
+                                <div className="mb-4">
+                                    <button
+                                        onClick={() => {
+                                            setShowMyPosts(!showMyPosts);
+                                            if (!showMyPosts) {
+                                                setSelectedCategory(null);
+                                            }
+                                        }}
+                                        className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                                            showMyPosts
+                                                ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg"
+                                                : "bg-gray-50 text-gray-700 hover:bg-gray-100"
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <User className="w-4 h-4" />
+                                            <span>Your Posts</span>
+                                        </div>
+                                        {showMyPosts && (
+                                            <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">
+                                                {posts.filter(p => p.user_id === user.id || String(p.user_id) === String(user.id)).length}
+                                            </span>
+                                        )}
+                                    </button>
+                                </div>
+                            )}
+                            
+                            {/* Sort By */}
+                            <div className="mb-4">
+                                <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2 block">
+                                    Sort By
+                                </label>
+                                <div className="space-y-2">
+                                    {[
+                                        { value: "recent", label: "Most Recent" },
+                                        { value: "popular", label: "Most Popular" },
+                                        { value: "trending", label: "Trending" },
+                                    ].map((option) => (
+                                        <button
+                                            key={option.value}
+                                            onClick={() => setSortBy(option.value as any)}
+                                            className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                                                sortBy === option.value
+                                                    ? "bg-blue-50 text-blue-700 border-2 border-blue-200"
+                                                    : "bg-gray-50 text-gray-700 hover:bg-gray-100 border-2 border-transparent"
+                                            }`}
+                                        >
+                                            {option.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {/* Categories Sidebar */}
+                        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+                            <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                                <TrendingUp className="w-5 h-5 mr-2 text-blue-600" />
                                 Categories
                             </h3>
                             <div className="space-y-2">
-                                <div
-                                    onClick={() => setSelectedCategory(null)}
-                                    className={`flex items-center space-x-2 p-2 hover:bg-muted rounded cursor-pointer transition-colors ${
-                                        selectedCategory === null
-                                            ? "bg-muted font-bold"
-                                            : ""
+                                <button
+                                    onClick={() => {
+                                        setSelectedCategory(null);
+                                        setShowMyPosts(false);
+                                    }}
+                                    className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                                        selectedCategory === null && !showMyPosts
+                                            ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg"
+                                            : "bg-gray-50 text-gray-700 hover:bg-gray-100"
                                     }`}
                                 >
-                                    <span className="text-sm text-foreground">
-                                        All Topics
-                                    </span>
-                                </div>
+                                    <span>All Topics</span>
+                                    {selectedCategory === null && !showMyPosts && (
+                                        <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">
+                                            {posts.length}
+                                        </span>
+                                    )}
+                                </button>
                                 {categories.map((category) => {
-                                    const isActive =
-                                        selectedCategory === category.name;
+                                    const isActive = selectedCategory === category.name;
+                                    const categoryCount = posts.filter(
+                                        (p) => p.forum_categories?.name === category.name
+                                    ).length;
                                     return (
-                                        <button
-                                            key={category.id}
-                                            onClick={() =>
-                                                setSelectedCategory(
-                                                    category.name
-                                                )
-                                            }
-                                            className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 border flex items-center gap-2 ${
-                                                isActive
-                                                    ? "shadow-md scale-105"
-                                                    : "bg-card border-border hover:bg-muted"
-                                            }`}
-                                            style={{
-                                                borderColor: isActive
-                                                    ? category.color
-                                                    : undefined,
-                                                backgroundColor: isActive
-                                                    ? `${category.color}15`
-                                                    : undefined,
-                                                color: isActive
-                                                    ? category.color
-                                                    : undefined,
-                                            }}
-                                        >
-                                            <span
-                                                className="w-2 h-2 rounded-full"
-                                                style={{
-                                                    backgroundColor:
-                                                        category.color,
-                                                }}
-                                            />
-                                            {category.name}
+                                <button
+                                    key={category.id}
+                                    onClick={() => {
+                                        setSelectedCategory(category.name);
+                                        setShowMyPosts(false);
+                                    }}
+                                    className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 border-2 ${
+                                        isActive
+                                            ? "shadow-lg scale-105"
+                                            : "bg-white border-gray-200 hover:border-gray-300"
+                                    }`}
+                                    style={{
+                                        borderColor: isActive ? category.color : undefined,
+                                        backgroundColor: isActive ? `${category.color}15` : undefined,
+                                        color: isActive ? category.color : undefined,
+                                    }}
+                                >
+                                            <div className="flex items-center gap-2">
+                                                <span
+                                                    className="w-2.5 h-2.5 rounded-full"
+                                                    style={{ backgroundColor: category.color }}
+                                                />
+                                                <span>{category.name}</span>
+                                            </div>
+                                            <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                                isActive ? "bg-white/20" : "bg-gray-100"
+                                            }`}>
+                                                {categoryCount}
+                                            </span>
                                         </button>
                                     );
                                 })}
                             </div>
                         </div>
 
-                        <div className="bg-gradient-to-br from-post to-post/80 rounded-lg shadow-md p-6 text-white">
-                            <h3 className="font-bold mb-2">Forum Guidelines</h3>
-                            <ul className="text-sm space-y-2">
-                                <li>Be respectful and friendly</li>
-                                <li>Share your experiences</li>
-                                <li>Help fellow travelers</li>
-                                <li>No spam or self-promotion</li>
+                        {/* Forum Guidelines */}
+                        <div className="bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl shadow-lg p-6 text-white">
+                            <h3 className="font-bold text-lg mb-4">Forum Guidelines</h3>
+                            <ul className="text-sm space-y-2.5">
+                                <li className="flex items-start gap-2">
+                                    <span className="mt-1">✓</span>
+                                    <span>Be respectful and friendly</span>
+                                </li>
+                                <li className="flex items-start gap-2">
+                                    <span className="mt-1">✓</span>
+                                    <span>Share your experiences</span>
+                                </li>
+                                <li className="flex items-start gap-2">
+                                    <span className="mt-1">✓</span>
+                                    <span>Help fellow travelers</span>
+                                </li>
+                                <li className="flex items-start gap-2">
+                                    <span className="mt-1">✓</span>
+                                    <span>No spam or self-promotion</span>
+                                </li>
                             </ul>
                         </div>
                     </div>

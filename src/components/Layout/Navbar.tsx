@@ -16,13 +16,14 @@ import {
   AlertTriangle,
   Menu,
   X,
+  Cloud,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { EmergencyModal } from "../Emergency/EmergencyModal";
 
 export const Navbar: React.FC = () => {
   const pathname = usePathname();
-  const { profile, signOut } = useAuth(); // profile, signOut từ useAuth
+  const { user, profile, account, signOut } = useAuth(); // Lấy user, profile, account, signOut từ useAuth
   const [isMenuOpen, setIsMenuOpen] = useState(false); // State cho Mobile Menu
   const [showEmergency, setShowEmergency] = useState(false); // State cho Emergency Modal
 
@@ -35,6 +36,7 @@ export const Navbar: React.FC = () => {
     { path: "/destinations", icon: BookOpen, label: "Destinations" },
     { path: "/forum", icon: MessageCircle, label: "Forum" },
     { path: "/diaries", icon: BookOpen, label: "Diaries" }, // Giữ lại từ phiên bản 2
+    { path: "/weather", icon: Cloud, label: "Weather" },
   ];
 
   const handleSignOut = () => {
@@ -97,6 +99,15 @@ export const Navbar: React.FC = () => {
           </div>
 
           <div className="flex items-center space-x-4">
+            {/* Weather Icon Button */}
+            <Link
+              href="/weather"
+              className="flex items-center justify-center p-2 rounded-lg text-muted-foreground hover:text-cyan-500 hover:bg-cyan-500/10 transition-all duration-200"
+              title="Weather"
+            >
+              <Cloud className="w-5 h-5" />
+            </Link>
+
             {/* Nút Khẩn cấp/SOS (Thêm từ phiên bản 1) */}
             <button
               onClick={() => setShowEmergency(true)}
@@ -108,17 +119,25 @@ export const Navbar: React.FC = () => {
               <span className="text-sm font-bold hidden sm:inline">SOS</span>
             </button>
 
-            {profile && (
+            {user && (
               <div className="flex items-center space-x-3">
                 {/* Avatar / Hồ sơ */}
                 <Link
                   href="/profile"
-                  title="Xem hồ sơ cá nhân"
+                  title={`Xem hồ sơ của ${user.full_name || profile?.username || account?.username || "User"}`}
                   className="w-8 h-8 bg-traveller/20 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-105"
                 >
-                  <span className="text-sm font-bold text-traveller">
-                    {profile.username?.charAt(0).toUpperCase() || "U"}
-                  </span>
+                  {user.avatar_url ? (
+                    <img
+                      src={user.avatar_url}
+                      alt={user.full_name || "User"}
+                      className="w-full h-full rounded-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-sm font-bold text-traveller">
+                      {(user.full_name || profile?.username || account?.username || "U").charAt(0).toUpperCase()}
+                    </span>
+                  )}
                 </Link>
 
                 {/* Đăng xuất (Màn hình lớn) */}
@@ -160,7 +179,7 @@ export const Navbar: React.FC = () => {
             <NavItem key={link.path} link={link} isMobile />
           ))}
 
-          {profile && (
+          {user && profile && (
             <button
               onClick={handleSignOut}
               className="flex items-center space-x-1 px-3 py-2 rounded-md transition-colors w-full text-lg justify-start text-muted-foreground hover:bg-muted hover:text-destructive"

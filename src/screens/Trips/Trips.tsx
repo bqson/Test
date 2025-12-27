@@ -107,7 +107,10 @@ export const Trips: React.FC = () => {
    * Fetch trips của user và sau đó fetch chi tiết destination nếu cần
    */
   const fetchUserTrips = async (userId: string) => {
-    if (!API_URL) return;
+    if (!API_URL) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
 
     try {
@@ -116,20 +119,36 @@ export const Trips: React.FC = () => {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
-          // Authorization header nếu cần
         },
       });
 
       if (!response.ok) {
+        // Handle different error status codes
+        if (response.status === 404) {
+          // User has no trips yet
+          setTrips([]);
+          setLoading(false);
+          return;
+        }
         throw new Error(
           `Failed to fetch user trips (Status: ${response.status})`
         );
       }
 
       const result = await response.json();
-      let tripsData: ITrip[] = Array.isArray(result.data || result)
-        ? result.data || result
-        : [];
+      let tripsData: ITrip[] = [];
+      
+      // Handle different response formats
+      if (Array.isArray(result)) {
+        tripsData = result;
+      } else if (result.data && Array.isArray(result.data)) {
+        tripsData = result.data;
+      } else if (result.data && !Array.isArray(result.data)) {
+        // Single trip object
+        tripsData = [result.data];
+      } else {
+        tripsData = [];
+      }
 
       // 2. Xử lý trường hợp API không nhúng Destination
       // Nếu tripsData không có trường `destination.name` (hoặc `destination` là null/undefined)
@@ -167,6 +186,7 @@ export const Trips: React.FC = () => {
     } catch (error) {
       console.error("Error fetching user trips:", error);
       setTrips([]);
+      // Don't show alert for fetch errors, just log and set empty array
     } finally {
       setLoading(false);
     }
@@ -193,31 +213,39 @@ export const Trips: React.FC = () => {
   };
 
   const handleDeleteTrip = async (tripId: string) => {
-    if (
-      !API_URL ||
-      !user?.id ||
-      !confirm(`Are you sure you want to delete this trip?`)
-    )
+    if (!API_URL || !user?.id) {
+      alert("Missing API URL or user information.");
       return;
+    }
+
+    if (!confirm(`Are you sure you want to delete this trip?`)) {
+      return;
+    }
 
     try {
       setLoading(true);
 
       // Bước 1: Xóa user khỏi trip (remove join_trip record)
-      const deleteJoinTripResponse = await fetch(
-        `${API_URL}/trips/${tripId}/users/${user.id}`,
-        {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      if (!deleteJoinTripResponse.ok) {
-        console.warn(
-          "Could not remove user from trip (might not be joined). Proceeding to delete trip."
+      // This is optional - if it fails, we still try to delete the trip
+      try {
+        const deleteJoinTripResponse = await fetch(
+          `${API_URL}/trips/${tripId}/users/${user.id}`,
+          {
+            method: "DELETE",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }
         );
+
+        if (!deleteJoinTripResponse.ok && deleteJoinTripResponse.status !== 404) {
+          console.warn(
+            `Could not remove user from trip (Status: ${deleteJoinTripResponse.status}). Proceeding to delete trip.`
+          );
+        }
+      } catch (joinError) {
+        console.warn("Error removing user from trip (non-critical):", joinError);
+        // Continue with trip deletion even if this fails
       }
 
       // Bước 2: Xóa trip
@@ -229,64 +257,85 @@ export const Trips: React.FC = () => {
       });
 
       if (!deleteTripResponse.ok) {
-        const errorText = await deleteTripResponse.text();
-        throw new Error(`Failed to delete trip: ${errorText}`);
+        let errorMessage = `Failed to delete trip (Status: ${deleteTripResponse.status})`;
+        try {
+          const errorData = await deleteTripResponse.json();
+          errorMessage = errorData.message || errorData.error || errorMessage;
+        } catch {
+          try {
+            const errorText = await deleteTripResponse.text();
+            if (errorText) errorMessage = errorText;
+          } catch {
+            // Use default error message
+          }
+        }
+        throw new Error(errorMessage);
       }
 
+      // Success - refresh the trips list
       handleTripActionSuccess();
     } catch (error) {
       console.error("Error deleting trip:", error);
-      alert(
-        `Error deleting trip: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      alert(`Error deleting trip: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
   };
 
-  // --- Render Logic (giữ nguyên) ---
+  // --- Render Logic (Enhanced loading state) ---
   if (loading || !user?.id) {
     return (
-      <div className="flex justify-center items-center h-screen bg-background">
+      <div className="flex flex-col justify-center items-center h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
         {!user ? (
-          <p className="text-lg text-foreground">
-            Please log in to view your trips.
-          </p>
+          <div className="text-center">
+            <p className="text-xl font-semibold text-gray-900 mb-2">
+              Please log in to view your trips.
+            </p>
+            <p className="text-gray-600">You need to be authenticated to access this page.</p>
+          </div>
         ) : (
-          // Sử dụng Tailwind CSS cho spinner
-          <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-t-4 border-trip"></div>
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-4 border-gray-200 border-t-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600 font-medium">Loading your trips...</p>
+          </div>
         )}
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* HEADER - Tối ưu Responsive */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+        {/* HEADER - Enhanced with better styling */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 sm:mb-12">
           {/* Tiêu đề */}
-          <div className="mb-4 sm:mb-0">
-            <h1 className="text-3xl font-bold text-foreground">My Trips</h1>
-            <p className="text-muted-foreground mt-2">
+          <div className="mb-6 sm:mb-0">
+            <h1 className="text-4xl sm:text-5xl font-extrabold text-gray-900 mb-2">
+              My Trips
+            </h1>
+            <p className="text-gray-600 text-base sm:text-lg">
               Manage your travel plans and budgets
             </p>
+            {trips.length > 0 && (
+              <p className="text-sm text-gray-500 mt-1">
+                {trips.length} {trips.length === 1 ? 'trip' : 'trips'} planned
+              </p>
+            )}
           </div>
 
-          {/* Nút Plan New Trip - Chiếm toàn bộ chiều rộng trên màn hình nhỏ */}
+          {/* Nút Plan New Trip - Enhanced styling */}
           <button
             onClick={handleOpenAddModal}
-            className="w-full sm:w-auto flex items-center justify-center space-x-2 bg-trip hover:bg-trip/90 text-white px-4 py-2 rounded-lg transition-colors shadow-md shadow-trip/30"
+            className="w-full sm:w-auto flex items-center justify-center space-x-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-3 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 font-semibold"
           >
             <Plus className="w-5 h-5" />
             <span>Plan New Trip</span>
           </button>
         </div>
 
-        {/* Danh sách chuyến đi - Tối ưu Responsive: sm:grid-cols-2 */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {/* Danh sách chuyến đi - Better spacing and responsive grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 sm:gap-8">
           {trips.length > 0 ? (
             trips.map((trip) => (
               // Thêm kiểm tra an toàn cho ID
@@ -301,15 +350,26 @@ export const Trips: React.FC = () => {
               </div>
             ))
           ) : (
-            // No Trips Message - Tối ưu Responsive: col-span-2 trên sm, 3 trên lg, 4 trên xl
-            <div className="col-span-1 sm:col-span-2 lg:col-span-3 xl:col-span-4 text-center py-12 bg-card rounded-lg shadow-inner">
-              <MapPin className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-foreground mb-2">
-                No trips yet
-              </h3>
-              <p className="text-muted-foreground">
-                Start planning your next adventure!
-              </p>
+            // Enhanced Empty State
+            <div className="col-span-1 sm:col-span-2 lg:col-span-3 xl:col-span-4">
+              <div className="text-center py-16 sm:py-20 bg-white rounded-2xl shadow-lg border-2 border-dashed border-gray-200">
+                <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 mb-6">
+                  <MapPin className="w-10 h-10 text-blue-600" />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-3">
+                  No trips yet
+                </h3>
+                <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                  Start planning your next adventure! Create your first trip to begin organizing your travel plans.
+                </p>
+                <button
+                  onClick={handleOpenAddModal}
+                  className="inline-flex items-center justify-center space-x-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-3 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 font-semibold"
+                >
+                  <Plus className="w-5 h-5" />
+                  <span>Create Your First Trip</span>
+                </button>
+              </div>
             </div>
           )}
         </div>

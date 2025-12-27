@@ -121,10 +121,10 @@ export const RouteCard: React.FC<RouteCardProps> = ({
       <div className="flex justify-between items-start mb-2 border-b pb-2 border-dashed">
         <h3 className="text-xl font-bold text-foreground">
           <Route className="inline w-5 h-5 mr-2 text-traveller" />
-          Chặng {route.index}: {route.title}
+          {route.title}
         </h3>
         <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-trip/10 text-trip">
-          Index {route.index}
+          Stop {(route.index ?? 0) + 1}
         </span>
       </div>
 

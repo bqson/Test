@@ -1,5 +1,19 @@
 import React, { useState } from "react";
-import { X, Save, MapPin } from "lucide-react"; // Bỏ Clock vì index không còn dùng select
+import { X, Save, MapPin } from "lucide-react";
+import dynamic from "next/dynamic";
+
+// Dynamically import LocationPicker to avoid SSR issues
+const LocationPicker = dynamic(
+  () => import("@/components/Map/LocationPicker").then((mod) => ({ default: mod.LocationPicker })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full rounded-lg overflow-hidden border border-gray-300 bg-gray-100 flex items-center justify-center" style={{ height: '250px' }}>
+        <p className="text-gray-500 text-sm">Loading map...</p>
+      </div>
+    ),
+  }
+);
 
 // Định nghĩa kiểu dữ liệu cho state Form
 interface RouteFormValues {
@@ -87,7 +101,7 @@ export const AddRouteForm: React.FC<AddRouteFormProps> = ({
 
   return (
     // Khung Modal/Form chính
-    <div className="bg-card p-8 rounded-xl shadow-2xl w-full max-w-lg relative max-h-[90vh] overflow-y-auto">
+    <div className="bg-card p-8 rounded-xl shadow-2xl w-full max-w-2xl relative max-h-[90vh] overflow-y-auto">
       <button
         onClick={onClose}
         className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
@@ -158,82 +172,80 @@ export const AddRouteForm: React.FC<AddRouteFormProps> = ({
           />
         </div>
 
-        {/* Tọa độ (4 trường) */}
+        {/* Tọa độ với Map Picker */}
         <fieldset className="border p-4 rounded-md space-y-3">
           <legend className="text-sm font-semibold text-trip px-1 flex items-center">
             <MapPin className="w-4 h-4 mr-1" /> Tọa độ Tuyến đường
           </legend>
-          <div className="grid grid-cols-2 gap-3">
-            {/* Start Location */}
-            <div>
-              <label
-                htmlFor="latStart"
-                className="text-xs block text-muted-foreground"
-              >
-                Vĩ độ Bắt đầu (Lat)
-              </label>
+          
+          {/* Start Location Picker */}
+          <div>
+            <label className="text-sm font-medium mb-2 block">
+              Điểm Bắt đầu - Click trên bản đồ để chọn
+            </label>
+            <LocationPicker
+              onLocationSelect={(lat, lng) => {
+                setFormData(prev => ({ ...prev, latStart: lat, lngStart: lng }));
+              }}
+              initialLat={formData.latStart || 10.7769}
+              initialLng={formData.lngStart || 106.7009}
+              height="250px"
+            />
+            <div className="grid grid-cols-2 gap-2 mt-2">
               <input
                 type="number"
                 step="any"
                 name="latStart"
                 value={formData.latStart}
                 onChange={handleChange}
-                className="w-full p-1 border rounded-md bg-input text-foreground text-sm"
+                className="w-full p-1 border rounded-md bg-input text-foreground text-xs"
                 placeholder="Lat Start"
                 required
               />
-            </div>
-            <div>
-              <label
-                htmlFor="lngStart"
-                className="text-xs block text-muted-foreground"
-              >
-                Kinh độ Bắt đầu (Lng)
-              </label>
               <input
                 type="number"
                 step="any"
                 name="lngStart"
                 value={formData.lngStart}
                 onChange={handleChange}
-                className="w-full p-1 border rounded-md bg-input text-foreground text-sm"
+                className="w-full p-1 border rounded-md bg-input text-foreground text-xs"
                 placeholder="Lng Start"
                 required
               />
             </div>
-            {/* End Location */}
-            <div>
-              <label
-                htmlFor="latEnd"
-                className="text-xs block text-muted-foreground"
-              >
-                Vĩ độ Kết thúc (Lat)
-              </label>
+          </div>
+
+          {/* End Location Picker */}
+          <div>
+            <label className="text-sm font-medium mb-2 block">
+              Điểm Kết thúc - Click trên bản đồ để chọn
+            </label>
+            <LocationPicker
+              onLocationSelect={(lat, lng) => {
+                setFormData(prev => ({ ...prev, latEnd: lat, lngEnd: lng }));
+              }}
+              initialLat={formData.latEnd || 10.7769}
+              initialLng={formData.lngEnd || 106.7009}
+              height="250px"
+            />
+            <div className="grid grid-cols-2 gap-2 mt-2">
               <input
                 type="number"
                 step="any"
                 name="latEnd"
                 value={formData.latEnd}
                 onChange={handleChange}
-                className="w-full p-1 border rounded-md bg-input text-foreground text-sm"
+                className="w-full p-1 border rounded-md bg-input text-foreground text-xs"
                 placeholder="Lat End"
                 required
               />
-            </div>
-            <div>
-              <label
-                htmlFor="lngEnd"
-                className="text-xs block text-muted-foreground"
-              >
-                Kinh độ Kết thúc (Lng)
-              </label>
               <input
                 type="number"
                 step="any"
                 name="lngEnd"
                 value={formData.lngEnd}
                 onChange={handleChange}
-                className="w-full p-1 border rounded-md bg-input text-foreground text-sm"
+                className="w-full p-1 border rounded-md bg-input text-foreground text-xs"
                 placeholder="Lng End"
                 required
               />
