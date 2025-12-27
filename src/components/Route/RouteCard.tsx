@@ -30,54 +30,84 @@ interface AddCostFormProps {
 }
 
 const AddCostForm: React.FC<AddCostFormProps> = ({ onClose, onSubmit }) => {
+  const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("other");
   const [amount, setAmount] = useState<number>(0);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!description || amount <= 0) return;
+    if (!title.trim() || amount <= 0) return;
     onSubmit({
-      description,
+      title: title.trim(),
+      description: description.trim() || title.trim(), // Use title as fallback if description is empty
+      category,
       amount,
       currency: "VND",
     });
+    // Reset form after submission
+    setTitle("");
+    setDescription("");
+    setCategory("other");
+    setAmount(0);
   };
 
   return (
     <div className="bg-white p-4 rounded-lg shadow-inner border border-gray-100 mt-2">
-      <h4 className="text-sm font-bold mb-2 text-trip">Thêm Chi Phí</h4>
+      <h4 className="text-sm font-bold mb-3 text-trip">Thêm Chi Phí</h4>
       <form onSubmit={handleSubmit} className="space-y-2">
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Tiêu đề (vd: Vé vào cửa, Bữa trưa)"
+          required
+          className="w-full rounded-md border border-gray-300 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-trip focus:border-transparent"
+        />
         <input
           type="text"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="Mô tả (vd: Tiền vé, Ăn tối)"
-          required
-          className="w-full rounded-md border p-1.5 text-xs"
+          placeholder="Mô tả chi tiết (tùy chọn)"
+          className="w-full rounded-md border border-gray-300 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-trip focus:border-transparent"
         />
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          className="w-full rounded-md border border-gray-300 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-trip focus:border-transparent"
+        >
+          <option value="transport">Vận chuyển</option>
+          <option value="accommodation">Chỗ ở</option>
+          <option value="food">Ăn uống</option>
+          <option value="entertainment">Giải trí</option>
+          <option value="shopping">Mua sắm</option>
+          <option value="other">Khác</option>
+        </select>
         <div className="flex items-center space-x-2">
           <input
             type="number"
-            value={amount}
-            onChange={(e) => setAmount(Number(e.target.value))}
+            value={amount || ""}
+            onChange={(e) => setAmount(Number(e.target.value) || 0)}
             required
             min="0"
+            step="1000"
             placeholder="Số tiền (VND)"
-            className="w-full rounded-md border p-1.5 text-xs"
+            className="flex-1 rounded-md border border-gray-300 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-trip focus:border-transparent"
           />
           <button
             type="submit"
-            className="flex items-center text-xs px-2 py-1 bg-trip text-white rounded-full hover:bg-trip-dark transition-colors"
-            disabled={!description || amount <= 0}
+            className="flex items-center text-xs px-3 py-2 bg-trip text-white rounded-md hover:bg-trip-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={!title.trim() || !amount || amount <= 0}
           >
-            <Check className="w-3 h-3" />
+            <Check className="w-4 h-4 mr-1" />
+            <span>Thêm</span>
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="flex items-center text-xs px-2 py-1 border border-gray-300 rounded-full hover:bg-gray-100 transition-colors"
+            className="flex items-center text-xs px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-100 transition-colors"
           >
-            <X className="w-3 h-3" />
+            <X className="w-4 h-4" />
           </button>
         </div>
       </form>
